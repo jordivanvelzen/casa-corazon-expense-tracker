@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { notion, DATABASE_ID } from "@/lib/notion";
 import { Expense, Category, PaidBy, Split, ExpenseType, Status, SettlementMethod } from "@/lib/types";
 import { calculateKarenOwes } from "@/lib/calculateKarenOwes";
-import {
-  PageObjectResponse,
-  QueryDataSourceParameters,
-} from "@notionhq/client/build/src/api-endpoints";
+import { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 
 function getTitle(page: PageObjectResponse, name: string): string {
   const prop = page.properties[name];
@@ -90,17 +87,32 @@ export async function GET() {
     let cursor: string | undefined = undefined;
 
     while (hasMore && allPages.length < 500) {
-      const queryParams: QueryDataSourceParameters = {
-        data_source_id: DATABASE_ID,
+      // Use REST API directly — SDK v5 removed databases.query
+      const body: Record<string, unknown> = {
         sorts: [{ property: "Date", direction: "descending" }],
         page_size: 100,
       };
-      if (cursor) queryParams.start_cursor = cursor;
+      if (cursor) body.start_cursor = cursor;
 
-      const response = await notion.dataSources.query(queryParams);
+      const response = await fetch(
+        `https://api.notion.com/v1/databases/${DATABASE_ID}/query`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.NOTION_TOKEN}`,
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }
+      ).then((r) => r.json()) as {
+        results: unknown[];
+        has_more: boolean;
+        next_cursor: string | null;
+      };
 
       for (const page of response.results) {
-        if ("properties" in page) {
+        if (page && typeof page === "object" && "properties" in page) {
           allPages.push(page as PageObjectResponse);
         }
       }
