@@ -25,8 +25,13 @@ export default function BalancePage() {
 
   useEffect(() => {
     fetch("/api/expenses")
-      .then((r) => r.json())
-      .then((data: Expense[]) => setExpenses(data))
+      .then((r) => {
+        if (!r.ok) throw new Error("API error");
+        return r.json();
+      })
+      .then((data) => {
+        if (Array.isArray(data)) setExpenses(data as Expense[]);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

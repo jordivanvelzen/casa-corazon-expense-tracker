@@ -111,10 +111,11 @@ export async function GET() {
 
     const expenses = allPages.map(mapPageToExpense);
     return NextResponse.json(expenses);
-  } catch (error) {
-    console.error("Failed to fetch expenses:", error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Failed to fetch expenses:", message, error);
     return NextResponse.json(
-      { error: "Failed to fetch expenses" },
+      { error: "Failed to fetch expenses", details: message },
       { status: 500 }
     );
   }

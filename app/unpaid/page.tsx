@@ -15,8 +15,10 @@ export default function UnpaidPage() {
   const fetchExpenses = useCallback(async () => {
     try {
       const res = await fetch("/api/expenses");
-      const data: Expense[] = await res.json();
-      setExpenses(data.filter((e) => e.status === "Pending").sort((a, b) => a.date.localeCompare(b.date)));
+      if (!res.ok) throw new Error("API error");
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error("Invalid response");
+      setExpenses((data as Expense[]).filter((e) => e.status === "Pending").sort((a, b) => a.date.localeCompare(b.date)));
     } catch {
       setToast({ message: "Failed to load expenses", type: "error" });
     } finally {
