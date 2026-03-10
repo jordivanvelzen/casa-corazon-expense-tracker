@@ -214,17 +214,20 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-2">Split</label>
           <div className="flex rounded-xl bg-gray-100 p-1">
-            {(["Shared (all 3)", "N&J only", "Karen only"] as Split[]).map((s) => (
+            {(["Shared (all 3)", "N&J only", "Karen only", "Deduct from rent"] as Split[]).map((s) => (
               <button
                 key={s}
-                onClick={() => setSplit(s)}
+                onClick={() => {
+                  setSplit(s);
+                  if (s === "Deduct from rent") setToDiscuss(true);
+                }}
                 className={`flex-1 py-2.5 text-xs font-medium rounded-lg transition-all ${
                   split === s
                     ? "bg-white text-gray-900 shadow-sm"
                     : "text-gray-500"
                 }`}
               >
-                {s}
+                {s === "Deduct from rent" ? "Rent ded." : s}
               </button>
             ))}
           </div>
@@ -296,7 +299,7 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
         </div>
       </div>
 
-      {/* To discuss */}
+      {/* To discuss / Needs approval */}
       <label className="flex items-center gap-3 cursor-pointer">
         <input
           type="checkbox"
@@ -304,7 +307,11 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
           onChange={(e) => setToDiscuss(e.target.checked)}
           className="w-5 h-5 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
         />
-        <span className="text-sm text-gray-700">Flag for discussion</span>
+        <span className="text-sm text-gray-700">
+          {split === "Deduct from rent"
+            ? "Needs Karen\u2019s approval"
+            : "Flag for discussion"}
+        </span>
       </label>
 
       {/* Notes */}

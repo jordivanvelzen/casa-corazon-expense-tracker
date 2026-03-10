@@ -21,10 +21,4 @@ export const CATEGORY_RULES: Record<Category, CategoryRule> = {
   Other: { split: null, paidBy: null },
 };
 
-export const RECURRING_CATEGORIES: Category[] = [
-  "Rent",
-  "Internet",
-  "Gas",
-  "Water Filter",
-  "Electricity",
-];
+export const RECURRING_CATEGORIES: Category[] = ["Rent", "Internet"];

@@ -5,6 +5,7 @@ import { Expense, Category } from "@/lib/types";
 import { CATEGORY_RULES } from "@/lib/categoryRules";
 import { getMissingRecurringForMonth, MissingRecurring } from "@/lib/recurringCheck";
 import { generateItemName } from "@/lib/generateItemName";
+import { getApprovedDeductions, getPendingDeductions, calculateAdjustedRent } from "@/lib/rentDeductions";
 import Spinner from "./Spinner";
 
 interface RecurringBannerProps {
@@ -14,8 +15,10 @@ interface RecurringBannerProps {
 export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
   const [missing, setMissing] = useState<MissingRecurring[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [baseRent, setBaseRent] = useState(3000);
   const [dismissed, setDismissed] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [addingInternet, setAddingInternet] = useState(false);
+  const [addingRent, setAddingRent] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -24,10 +27,17 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
       return;
     }
 
-    fetch("/api/expenses")
-      .then((r) => r.json())
-      .then((data: Expense[]) => {
+    Promise.all([
+      fetch("/api/expenses").then((r) => r.json()),
+      fetch("/api/config").then((r) => r.json()),
+    ])
+      .then(([data, config]: [Expense[], { baseRent: number }]) => {
+        if (!Array.isArray(data)) {
+          setLoaded(true);
+          return;
+        }
         setExpenses(data);
+        setBaseRent(config.baseRent);
         const now = new Date();
         const m = getMissingRecurringForMonth(data, now.getFullYear(), now.getMonth());
         setMissing(m);
@@ -46,36 +56,58 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
     [expenses]
   );
 
-  const handleAddAll = async () => {
-    setAdding(true);
+  const handleAddInternet = async () => {
+    setAddingInternet(true);
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const rule = CATEGORY_RULES["Internet"];
+    const amount = getLastAmount("Internet");
+    const item = generateItemName("Internet", "Recurring Bill", dateStr);
+
+    await fetch("/api/expenses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        item,
+        amount,
+        date: dateStr,
+        category: "Internet",
+        paidBy: rule.paidBy || "Nash & Jordi",
+        split: rule.split || "Shared (all 3)",
+        type: "Recurring Bill",
+        status: "Pending",
+        toDiscuss: false,
+        notes: "",
+      }),
+    });
+
+    setAddingInternet(false);
+    setMissing((prev) => prev.filter((m) => m.category !== "Internet"));
+    onAdded();
+  };
+
+  const handleAddRent = async () => {
+    setAddingRent(true);
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
 
-    for (const m of missing) {
-      const rule = CATEGORY_RULES[m.category];
-      const amount = getLastAmount(m.category);
-      const item = generateItemName(m.category, "Recurring Bill", dateStr);
+    const approved = getApprovedDeductions(expenses);
 
-      await fetch("/api/expenses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          item,
-          amount,
-          date: dateStr,
-          category: m.category,
-          paidBy: rule.paidBy || "Nash & Jordi",
-          split: rule.split || "Shared (all 3)",
-          type: "Recurring Bill",
-          status: "Pending",
-          toDiscuss: false,
-          notes: "",
-        }),
-      });
-    }
+    await fetch("/api/rent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: dateStr,
+        deductions: approved.map((d) => ({
+          id: d.id,
+          karenOwes: d.karensOwes,
+          item: d.item,
+        })),
+      }),
+    });
 
-    setAdding(false);
-    setMissing([]);
+    setAddingRent(false);
+    setMissing((prev) => prev.filter((m) => m.category !== "Rent"));
     onAdded();
   };
 
@@ -86,27 +118,20 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
 
   if (dismissed || !loaded || missing.length === 0) return null;
 
+  const missingInternet = missing.some((m) => m.category === "Internet");
+  const missingRent = missing.some((m) => m.category === "Rent");
+  const lastInternetAmount = getLastAmount("Internet");
+  const approved = getApprovedDeductions(expenses);
+  const pending = getPendingDeductions(expenses);
+  const adjustedRent = calculateAdjustedRent(baseRent, approved);
+
   const now = new Date();
   const monthName = now.toLocaleString("en-US", { month: "long", year: "numeric" });
 
   return (
-    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 space-y-3">
       <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="text-sm text-amber-800">
-            <span className="font-medium">📅 {monthName}</span> — missing recurring:{" "}
-            <span className="font-semibold">
-              {missing.map((m) => m.category).join(", ")}
-            </span>
-          </p>
-          <button
-            onClick={handleAddAll}
-            disabled={adding}
-            className="mt-2 text-sm font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50 flex items-center gap-2"
-          >
-            {adding ? <><Spinner className="h-4 w-4" /> Adding...</> : "Add all"}
-          </button>
-        </div>
+        <p className="text-sm font-medium text-amber-800">Missing recurring — {monthName}</p>
         <button
           onClick={handleDismiss}
           className="text-amber-400 hover:text-amber-600 ml-2 text-lg leading-none"
@@ -115,6 +140,60 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
           ×
         </button>
       </div>
+
+      {/* Internet */}
+      {missingInternet && (
+        <div className="flex items-center justify-between bg-white rounded-lg p-3">
+          <div>
+            <p className="text-sm font-medium text-gray-900">Internet</p>
+            <p className="text-xs text-gray-500">
+              MXN ${lastInternetAmount.toLocaleString()}
+            </p>
+          </div>
+          <button
+            onClick={handleAddInternet}
+            disabled={addingInternet}
+            className="px-3 py-1.5 bg-orange-500 text-white text-xs font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center gap-1"
+          >
+            {addingInternet ? <><Spinner className="h-3 w-3" /> Adding</> : "Add"}
+          </button>
+        </div>
+      )}
+
+      {/* Rent */}
+      {missingRent && (
+        <div className="bg-white rounded-lg p-3 space-y-2">
+          <p className="text-sm font-medium text-gray-900">Rent</p>
+          <div className="text-xs space-y-1 text-gray-600">
+            <div className="flex justify-between">
+              <span>Base rent</span>
+              <span>MXN ${baseRent.toLocaleString()}</span>
+            </div>
+            {approved.map((d) => (
+              <div key={d.id} className="flex justify-between text-green-700">
+                <span className="truncate mr-2">- {d.item}</span>
+                <span className="shrink-0">-${d.karensOwes.toFixed(2)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between font-semibold text-gray-900 border-t border-gray-100 pt-1">
+              <span>Total</span>
+              <span>MXN ${adjustedRent.toLocaleString()}</span>
+            </div>
+          </div>
+          {pending.length > 0 && (
+            <p className="text-xs text-amber-600">
+              + {pending.length} item{pending.length !== 1 ? "s" : ""} pending Karen&apos;s approval
+            </p>
+          )}
+          <button
+            onClick={handleAddRent}
+            disabled={addingRent}
+            className="w-full py-2 bg-orange-500 text-white text-sm font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center justify-center gap-1"
+          >
+            {addingRent ? <><Spinner className="h-4 w-4" /> Adding...</> : "Add Rent"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

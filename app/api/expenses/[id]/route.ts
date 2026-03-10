@@ -25,6 +25,12 @@ export async function PATCH(
       };
     }
 
+    if (body.settlement !== undefined) {
+      properties.Settlement = {
+        relation: body.settlement.map((sid: string) => ({ id: sid })),
+      };
+    }
+
     await notion.pages.update({
       page_id: id,
       properties: properties as Parameters<typeof notion.pages.update>[0]["properties"],

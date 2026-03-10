@@ -1,4 +1,4 @@
-export type Split = "Shared (all 3)" | "N&J only" | "Karen only";
+export type Split = "Shared (all 3)" | "N&J only" | "Karen only" | "Deduct from rent";
 
 export type PaidBy = "Nash & Jordi" | "Karen";
 

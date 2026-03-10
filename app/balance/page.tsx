@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Expense } from "@/lib/types";
+import { getApprovedDeductions, getPendingDeductions, calculateAdjustedRent } from "@/lib/rentDeductions";
 import Spinner from "@/components/Spinner";
 
 interface MonthlyBreakdown {
@@ -21,16 +23,20 @@ interface CategoryBreakdown {
 
 export default function BalancePage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [baseRent, setBaseRent] = useState(3000);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/expenses")
-      .then((r) => {
+    Promise.all([
+      fetch("/api/expenses").then((r) => {
         if (!r.ok) throw new Error("API error");
         return r.json();
-      })
-      .then((data) => {
+      }),
+      fetch("/api/config").then((r) => r.json()),
+    ])
+      .then(([data, config]: [unknown, { baseRent: number }]) => {
         if (Array.isArray(data)) setExpenses(data as Expense[]);
+        setBaseRent(config.baseRent);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -141,6 +147,42 @@ export default function BalancePage() {
             : "All square \u2713"}
         </p>
       </div>
+
+      {/* Next Rent Preview */}
+      {(() => {
+        const approved = getApprovedDeductions(expenses);
+        const pending = getPendingDeductions(expenses);
+        if (approved.length === 0 && pending.length === 0) return null;
+        const adjustedRent = calculateAdjustedRent(baseRent, approved);
+        const pendingTotal = Math.round(pending.reduce((s, e) => s + e.karensOwes, 0) * 100) / 100;
+        return (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+            <h2 className="text-sm font-semibold text-blue-800 mb-2">Next Rent</h2>
+            <div className="text-xs space-y-1 text-blue-700">
+              <div className="flex justify-between">
+                <span>Base rent</span>
+                <span>MXN ${baseRent.toLocaleString()}</span>
+              </div>
+              {approved.map((d) => (
+                <div key={d.id} className="flex justify-between text-green-700">
+                  <span className="truncate mr-2">- {d.item}</span>
+                  <span className="shrink-0">-${d.karensOwes.toFixed(2)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between font-bold border-t border-blue-200 pt-1 mt-1 text-blue-900">
+                <span>Adjusted rent</span>
+                <span>MXN ${adjustedRent.toLocaleString()}</span>
+              </div>
+            </div>
+            {pending.length > 0 && (
+              <p className="mt-2 text-xs text-amber-600">
+                + {pending.length} item{pending.length !== 1 ? "s" : ""} pending approval (${pendingTotal.toFixed(2)})
+                {" "}<Link href="/review" className="underline">Review</Link>
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Monthly breakdown */}
       <h2 className="text-lg font-semibold text-gray-900 mb-3">Monthly Breakdown</h2>
