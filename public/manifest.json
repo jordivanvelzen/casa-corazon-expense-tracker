@@ -1,0 +1,21 @@
+{
+  "name": "Casa Corazón",
+  "short_name": "CasaCor",
+  "description": "Household expense tracker",
+  "start_url": "/add",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
