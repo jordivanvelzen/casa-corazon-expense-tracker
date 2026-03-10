@@ -94,7 +94,7 @@ export async function GET() {
       };
       if (cursor) body.start_cursor = cursor;
 
-      const response = await fetch(
+      const res = await fetch(
         `https://api.notion.com/v1/databases/${DATABASE_ID}/query`,
         {
           method: "POST",
@@ -105,11 +105,16 @@ export async function GET() {
           },
           body: JSON.stringify(body),
         }
-      ).then((r) => r.json()) as {
-        results: unknown[];
-        has_more: boolean;
-        next_cursor: string | null;
-      };
+      );
+      const response = await res.json();
+
+      if (!res.ok || !Array.isArray(response.results)) {
+        console.error("Notion API error:", JSON.stringify(response));
+        return NextResponse.json(
+          { error: "Notion API error", details: response.message || JSON.stringify(response) },
+          { status: 502 }
+        );
+      }
 
       for (const page of response.results) {
         if (page && typeof page === "object" && "properties" in page) {
