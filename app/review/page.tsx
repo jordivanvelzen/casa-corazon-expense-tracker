@@ -100,12 +100,21 @@ export default function ReviewPage() {
     const { id } = expense;
     setUpdatingId(id, true);
     try {
+      // Recalculate the correct karensOwes in case the stored value is stale
+      const liveOwes = calculateKarenOwes(
+        expense.amount,
+        expense.split,
+        expense.paidBy,
+        expense.category
+      );
       const decision = formatDecision("Approved rent deduction");
       const newNotes = appendDecision(expense.notes, decision);
-      await patch(id, { toDiscuss: false, notes: newNotes });
+      await patch(id, { toDiscuss: false, karensOwes: liveOwes, notes: newNotes });
       setExpenses((prev) =>
         prev.map((e) =>
-          e.id === id ? { ...e, toDiscuss: false, notes: newNotes } : e
+          e.id === id
+            ? { ...e, toDiscuss: false, karensOwes: liveOwes, notes: newNotes }
+            : e
         )
       );
       setToast({ message: "Approved", type: "success" });
