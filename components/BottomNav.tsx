@@ -2,17 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useUser } from "@/lib/useUser";
 
-const tabs = [
-  { href: "/add", label: "Add", icon: "+" },
-  { href: "/unpaid", label: "Unpaid", icon: "\u23F3" },
-  { href: "/review", label: "Review", icon: "\uD83D\uDC41" },
-  { href: "/balance", label: "Balance", icon: "\u2696\uFE0F" },
-  { href: "/history", label: "History", icon: "\uD83D\uDCCB" },
+const ALL_TABS = [
+  { href: "/add", label: "Add", icon: "+", hideForKaren: false },
+  { href: "/unpaid", label: "Unpaid", icon: "\u23F3", hideForKaren: true },
+  { href: "/review", label: "Review", icon: "\uD83D\uDC41", hideForKaren: false },
+  { href: "/balance", label: "Balance", icon: "\u2696\uFE0F", hideForKaren: false },
+  { href: "/history", label: "History", icon: "\uD83D\uDCCB", hideForKaren: false },
 ];
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const { user } = useUser();
+
+  const tabs = ALL_TABS.filter((t) => !(t.hideForKaren && user === "Karen"));
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
