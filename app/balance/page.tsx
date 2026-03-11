@@ -116,7 +116,7 @@ export default function BalancePage() {
 
   // N&J only expenses
   const njOnlyExpenses = expenses.filter(
-    (e) => e.split === "N&J only" && e.type !== "Settlement"
+    (e) => e.split === "N&J only" && e.type !== "Settlement" && e.category !== "Rent"
   );
   const njOnlyTotal = Math.round(njOnlyExpenses.reduce((s, e) => s + e.amount, 0) * 100) / 100;
   const njMonths = groupByMonth(njOnlyExpenses, "amount");
