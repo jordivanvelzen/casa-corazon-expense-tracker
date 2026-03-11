@@ -65,6 +65,20 @@ function fmtDate(date: string) {
   return new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function Chevron({ open, className }: { open: boolean; className?: string }) {
+  return (
+    <svg
+      className={`w-4 h-4 transition-transform duration-200 ${open ? "rotate-180" : ""} ${className ?? ""}`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2.5}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
 export default function BalancePage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -291,9 +305,7 @@ export default function BalancePage() {
               </p>
             </div>
             {netMonths.length > 0 && (
-              <span className="text-gray-400 text-xs mt-1 ml-3 shrink-0">
-                {netExpanded ? "▲" : "▼"}
-              </span>
+              <Chevron open={netExpanded} className="text-gray-400 mt-1.5 ml-3 shrink-0" />
             )}
           </div>
         </button>
@@ -309,7 +321,7 @@ export default function BalancePage() {
                     className="w-full flex items-center justify-between py-2 text-sm"
                   >
                     <span className="flex items-center gap-1.5 text-gray-700">
-                      <span className="text-gray-300 text-xs">{open ? "▲" : "▼"}</span>
+                      <Chevron open={open} className="text-gray-400" />
                       {m.label}
                     </span>
                     <span
@@ -325,7 +337,7 @@ export default function BalancePage() {
                     </span>
                   </button>
                   {open && (
-                    <div className="ml-4 mb-1 space-y-0.5">
+                    <div className="ml-5 mb-1 space-y-0.5">
                       {m.items.map((e) => (
                         <div key={e.id} className="flex justify-between text-xs py-1 text-gray-600">
                           <span className="truncate mr-2">
@@ -369,9 +381,7 @@ export default function BalancePage() {
                 </p>
               </div>
               {njMonths.length > 0 && (
-                <span className="text-gray-400 text-xs mt-1 ml-3 shrink-0">
-                  {njExpanded ? "▲" : "▼"}
-                </span>
+                <Chevron open={njExpanded} className="text-red-300 mt-1.5 ml-3 shrink-0" />
               )}
             </div>
           </button>
@@ -387,7 +397,7 @@ export default function BalancePage() {
                       className="w-full flex items-center justify-between py-2 text-sm"
                     >
                       <span className="flex items-center gap-1.5 text-gray-700">
-                        <span className="text-gray-300 text-xs">{open ? "▲" : "▼"}</span>
+                        <Chevron open={open} className="text-red-300" />
                         {m.label}
                       </span>
                       <span className="font-medium text-red-700">
@@ -395,7 +405,7 @@ export default function BalancePage() {
                       </span>
                     </button>
                     {open && (
-                      <div className="ml-4 mb-1 space-y-0.5">
+                      <div className="ml-5 mb-1 space-y-0.5">
                         {m.items.map((e) => (
                           <div key={e.id} className="flex justify-between text-xs py-1 text-gray-600">
                             <span className="truncate mr-2">
@@ -559,8 +569,8 @@ export default function BalancePage() {
                       className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
                     >
                       <td className="py-2.5 pr-3 text-gray-900 whitespace-nowrap">
-                        <span className="flex items-center gap-1">
-                          <span className="text-gray-300 text-xs">{isExpanded ? "▲" : "▼"}</span>
+                        <span className="flex items-center gap-1.5">
+                          <Chevron open={isExpanded} className="text-gray-400" />
                           {m.label}
                           {m.settled && <span className="ml-1 text-green-500">✓</span>}
                         </span>
@@ -661,9 +671,7 @@ export default function BalancePage() {
                       ? `Karen owes $${c.total.toFixed(2)}`
                       : `N&J owe $${Math.abs(c.total).toFixed(2)}`}
                   </span>
-                  <span className="text-gray-400 text-xs">
-                    {expandedCategory === c.category ? "▲" : "▼"}
-                  </span>
+                  <Chevron open={expandedCategory === c.category} className="text-gray-400" />
                 </div>
               </button>
               {expandedCategory === c.category && (
