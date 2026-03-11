@@ -7,6 +7,7 @@ import {
   getApprovedDeductions,
   getPendingDeductions,
   calculateAdjustedRent,
+  effectiveDeductionAmount,
 } from "@/lib/rentDeductions";
 import Spinner from "@/components/Spinner";
 import Toast from "@/components/Toast";
@@ -429,7 +430,7 @@ export default function BalancePage() {
                 >
                   <span className="truncate mr-2">- {d.item}</span>
                   <span className="shrink-0">
-                    -${d.karensOwes.toFixed(2)}
+                    -${effectiveDeductionAmount(d).toFixed(2)}
                   </span>
                 </div>
               ))}

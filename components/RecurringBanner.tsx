@@ -5,7 +5,7 @@ import { Expense, Category } from "@/lib/types";
 import { CATEGORY_RULES } from "@/lib/categoryRules";
 import { getMissingRecurringForMonth, MissingRecurring } from "@/lib/recurringCheck";
 import { generateItemName } from "@/lib/generateItemName";
-import { getApprovedDeductions, getPendingDeductions, calculateAdjustedRent } from "@/lib/rentDeductions";
+import { getApprovedDeductions, getPendingDeductions, calculateAdjustedRent, effectiveDeductionAmount } from "@/lib/rentDeductions";
 import Spinner from "./Spinner";
 
 interface RecurringBannerProps {
@@ -117,7 +117,7 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
         date: dateStr,
         deductions: approved.map((d) => ({
           id: d.id,
-          karenOwes: d.karensOwes,
+          karenOwes: effectiveDeductionAmount(d),
           item: d.item,
         })),
       }),
@@ -143,7 +143,7 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
         date: pendingRent.date,
         deductions: approved.map((d) => ({
           id: d.id,
-          karenOwes: d.karensOwes,
+          karenOwes: effectiveDeductionAmount(d),
           item: d.item,
         })),
       }),
@@ -223,7 +223,7 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
             {approved.map((d) => (
               <div key={d.id} className="flex justify-between text-green-700">
                 <span className="truncate mr-2">- {d.item}</span>
-                <span className="shrink-0">-${d.karensOwes.toFixed(2)}</span>
+                <span className="shrink-0">-${effectiveDeductionAmount(d).toFixed(2)}</span>
               </div>
             ))}
             <div className="flex justify-between font-semibold text-gray-900 border-t border-gray-100 pt-1">
@@ -261,7 +261,7 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
             {approved.map((d) => (
               <div key={d.id} className="flex justify-between text-green-700">
                 <span className="truncate mr-2">- {d.item}</span>
-                <span className="shrink-0">-${d.karensOwes.toFixed(2)}</span>
+                <span className="shrink-0">-${effectiveDeductionAmount(d).toFixed(2)}</span>
               </div>
             ))}
             {approved.length === 0 && (

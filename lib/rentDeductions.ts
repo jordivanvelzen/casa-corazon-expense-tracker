@@ -1,4 +1,13 @@
 import { Expense } from "./types";
+import { calculateKarenOwes } from "./calculateKarenOwes";
+
+/**
+ * The effective deduction amount for a "Deduct from rent" expense.
+ * Always recalculated from source fields so stale stored karensOwes doesn't matter.
+ */
+export function effectiveDeductionAmount(e: Expense): number {
+  return calculateKarenOwes(e.amount, e.split, e.paidBy, e.category);
+}
 
 /** Get expenses approved for rent deduction but not yet settled */
 export function getApprovedDeductions(expenses: Expense[]): Expense[] {
@@ -7,7 +16,7 @@ export function getApprovedDeductions(expenses: Expense[]): Expense[] {
       e.split === "Deduct from rent" &&
       !e.toDiscuss &&
       e.settlement.length === 0 &&
-      e.karensOwes > 0
+      effectiveDeductionAmount(e) > 0
   );
 }
 
@@ -27,7 +36,7 @@ export function calculateAdjustedRent(
   approvedDeductions: Expense[]
 ): number {
   const totalDeductions = approvedDeductions.reduce(
-    (sum, e) => sum + e.karensOwes,
+    (sum, e) => sum + effectiveDeductionAmount(e),
     0
   );
   return Math.max(0, Math.round((baseRent - totalDeductions) * 100) / 100);
