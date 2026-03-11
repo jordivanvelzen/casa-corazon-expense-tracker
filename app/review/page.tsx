@@ -1,11 +1,24 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Expense, Split } from "@/lib/types";
+import { Expense, Split, Category } from "@/lib/types";
 import { calculateKarenOwes } from "@/lib/calculateKarenOwes";
+import { CATEGORY_RULES } from "@/lib/categoryRules";
 import ExpenseRow from "@/components/ExpenseRow";
 import Spinner from "@/components/Spinner";
 import Toast from "@/components/Toast";
+
+/**
+ * Returns the split to use for an expense — stored value, or falls back
+ * to the category's default rule if no split has been explicitly set.
+ */
+function effectiveSplit(expense: Expense): Split | null {
+  if (expense.split) return expense.split;
+  const rule = expense.category
+    ? CATEGORY_RULES[expense.category as Category]
+    : null;
+  return rule?.split ?? null;
+}
 
 const SPLIT_OPTIONS: Split[] = [
   "Shared (all 3)",
@@ -109,10 +122,12 @@ export default function ReviewPage() {
     const { id } = expense;
     setUpdatingId(id, true);
     try {
-      // Always recalculate so stale stored karensOwes doesn't affect the label or balance
+      // Always recalculate so stale/missing stored values don't affect the label or balance.
+      // effectiveSplit falls back to the category default if no split is stored.
+      const split = effectiveSplit(expense);
       const liveOwes = calculateKarenOwes(
         expense.amount,
-        expense.split,
+        split,
         expense.paidBy,
         expense.category
       );
@@ -124,11 +139,24 @@ export default function ReviewPage() {
           : "Approved";
       const decision = formatDecision(actionLabel, approveComment);
       const newNotes = appendDecision(expense.notes, decision);
-      await patch(id, { toDiscuss: false, karensOwes: liveOwes, notes: newNotes });
+      // Patch split too if it was inferred (wasn't stored)
+      const patchBody: Record<string, unknown> = {
+        toDiscuss: false,
+        karensOwes: liveOwes,
+        notes: newNotes,
+      };
+      if (!expense.split && split) patchBody.split = split;
+      await patch(id, patchBody);
       setExpenses((prev) =>
         prev.map((e) =>
           e.id === id
-            ? { ...e, toDiscuss: false, karensOwes: liveOwes, notes: newNotes }
+            ? {
+                ...e,
+                toDiscuss: false,
+                karensOwes: liveOwes,
+                split: split ?? e.split,
+                notes: newNotes,
+              }
             : e
         )
       );
@@ -265,7 +293,7 @@ export default function ReviewPage() {
 
                   const liveOwes = calculateKarenOwes(
                     expense.amount,
-                    expense.split,
+                    effectiveSplit(expense),
                     expense.paidBy,
                     expense.category
                   );
