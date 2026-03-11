@@ -11,6 +11,7 @@ import {
 import { CATEGORY_RULES } from "@/lib/categoryRules";
 import { calculateKarenOwes } from "@/lib/calculateKarenOwes";
 import { generateItemName } from "@/lib/generateItemName";
+import { compressImage } from "@/lib/compressImage";
 import Spinner from "./Spinner";
 
 const ALL_CATEGORIES: Category[] = [
@@ -50,7 +51,10 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
   const [toDiscuss, setToDiscuss] = useState(false);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const amountRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const updateItemName = useCallback(
     (cat: Category | null, t: ExpenseType, d: string) => {
@@ -95,11 +99,42 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
     return { text: "No debt", color: "text-gray-400" };
   })();
 
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      setImageFile(compressed);
+      setImagePreview(URL.createObjectURL(compressed));
+    } catch {
+      alert("Could not process image. Try a different photo.");
+    }
+    // Reset input so the same file can be re-selected
+    e.target.value = "";
+  };
+
+  const handleRemoveImage = () => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
   const handleSubmit = async () => {
     if (!category || !amount) return;
     setSubmitting(true);
 
     try {
+      // Upload image first if one is selected
+      let imageUrl: string | null = null;
+      if (imageFile) {
+        const fd = new FormData();
+        fd.append("file", imageFile);
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
+        if (!uploadRes.ok) throw new Error("Image upload failed");
+        const uploadData = await uploadRes.json();
+        imageUrl = uploadData.url;
+      }
+
       const res = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -114,6 +149,7 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
           status,
           toDiscuss,
           notes,
+          ...(imageUrl ? { imageUrl } : {}),
         }),
       });
 
@@ -125,6 +161,7 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
       setStatus("Paid");
       setToDiscuss(false);
       setNotes("");
+      handleRemoveImage();
       onSuccess();
     } catch {
       alert("Failed to add expense. Please try again.");
@@ -335,6 +372,50 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
         />
       </div>
 
+      {/* Photo (optional) */}
+      <div>
+        <label className="block text-xs font-medium text-gray-500 mb-2">
+          Photo <span className="font-normal text-gray-400">(optional)</span>
+        </label>
+
+        {/* Hidden file input — accept any image, let OS pick camera/gallery */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleImageSelect}
+        />
+
+        {imagePreview ? (
+          /* Preview + remove */
+          <div className="relative w-full rounded-xl overflow-hidden border border-gray-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imagePreview}
+              alt="Receipt preview"
+              className="w-full object-cover max-h-48"
+            />
+            <button
+              onClick={handleRemoveImage}
+              className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm leading-none"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          /* Pick photo button */
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            className="w-full h-16 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center gap-2 text-sm text-gray-400 hover:border-orange-300 hover:text-orange-400 transition-colors"
+          >
+            <span className="text-xl">📷</span>
+            Add a photo / receipt
+          </button>
+        )}
+      </div>
+
       {/* Submit */}
       <button
         onClick={handleSubmit}
@@ -343,7 +424,8 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
       >
         {submitting ? (
           <>
-            <Spinner className="text-white" /> Adding...
+            <Spinner className="text-white" />
+            {imageFile ? "Uploading…" : "Adding…"}
           </>
         ) : (
           "Add expense"

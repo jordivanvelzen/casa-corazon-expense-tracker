@@ -43,4 +43,5 @@ export interface Expense {
   toDiscuss: boolean;
   notes: string;
   settlement: string[]; // array of related page IDs
+  imageUrl: string | null;
 }

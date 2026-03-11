@@ -60,6 +60,16 @@ function getRelation(page: PageObjectResponse, name: string): string[] {
   return [];
 }
 
+function getFiles(page: PageObjectResponse, name: string): string | null {
+  const prop = page.properties[name];
+  if (prop?.type === "files" && prop.files.length > 0) {
+    const f = prop.files[0];
+    if (f.type === "external") return f.external.url;
+    if (f.type === "file") return f.file.url;
+  }
+  return null;
+}
+
 function mapPageToExpense(page: PageObjectResponse): Expense {
   return {
     id: page.id,
@@ -77,6 +87,7 @@ function mapPageToExpense(page: PageObjectResponse): Expense {
     toDiscuss: getCheckbox(page, "To discuss"),
     notes: getRichText(page, "Notes"),
     settlement: getRelation(page, "Settlement"),
+    imageUrl: getFiles(page, "Image"),
   };
 }
 
@@ -185,6 +196,12 @@ export async function POST(request: NextRequest) {
     if (body.notes) {
       properties.Notes = {
         rich_text: [{ text: { content: body.notes } }],
+      };
+    }
+
+    if (body.imageUrl) {
+      properties.Image = {
+        files: [{ name: "photo.jpg", type: "external", external: { url: body.imageUrl } }],
       };
     }
 

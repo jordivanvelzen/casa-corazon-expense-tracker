@@ -52,6 +52,22 @@ export default function ExpenseRow({
           )}
         </div>
       </div>
+      {expense.imageUrl && (
+        <a
+          href={expense.imageUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 block"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={expense.imageUrl}
+            alt="Receipt"
+            className="w-full max-h-40 object-cover rounded-lg border border-gray-100"
+          />
+        </a>
+      )}
       {action && <div className="mt-3">{action}</div>}
     </div>
   );
