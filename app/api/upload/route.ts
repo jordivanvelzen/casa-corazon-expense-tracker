@@ -10,6 +10,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return NextResponse.json({ error: "Upload failed", details: "BLOB_READ_WRITE_TOKEN not configured" }, { status: 500 });
+    }
+
     // Store under expenses/ folder with a timestamp so filenames never collide
     const blob = await put(`expenses/${Date.now()}-${file.name}`, file, {
       access: "public",
