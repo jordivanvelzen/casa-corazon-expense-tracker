@@ -20,6 +20,8 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
   const [addingInternet, setAddingInternet] = useState(false);
   const [addingRent, setAddingRent] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // An existing Pending rent entry for this month (if any)
+  const [pendingRent, setPendingRent] = useState<Expense | null>(null);
 
   useEffect(() => {
     if (sessionStorage.getItem("recurringBannerDismissed")) {
@@ -41,6 +43,20 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
         const now = new Date();
         const m = getMissingRecurringForMonth(data, now.getFullYear(), now.getMonth());
         setMissing(m);
+
+        // Detect an existing Pending rent for this month (so we can apply deductions to it)
+        const pending =
+          data.find((e) => {
+            if (e.type !== "Recurring Bill" || e.category !== "Rent") return false;
+            if (e.status !== "Pending") return false;
+            const d = new Date(e.date + "T00:00:00");
+            return (
+              d.getFullYear() === now.getFullYear() &&
+              d.getMonth() === now.getMonth()
+            );
+          }) ?? null;
+        setPendingRent(pending);
+
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -86,6 +102,7 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
     onAdded();
   };
 
+  // Create a new rent entry with deductions applied
   const handleAddRent = async () => {
     setAddingRent(true);
     const now = new Date();
@@ -111,19 +128,53 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
     onAdded();
   };
 
+  // Apply deductions to an existing Pending rent entry and mark it as Paid
+  const handlePayRent = async () => {
+    if (!pendingRent) return;
+    setAddingRent(true);
+
+    const approved = getApprovedDeductions(expenses);
+
+    await fetch("/api/rent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rentId: pendingRent.id,
+        date: pendingRent.date,
+        deductions: approved.map((d) => ({
+          id: d.id,
+          karenOwes: d.karensOwes,
+          item: d.item,
+        })),
+      }),
+    });
+
+    setAddingRent(false);
+    setPendingRent(null);
+    onAdded();
+  };
+
   const handleDismiss = () => {
     sessionStorage.setItem("recurringBannerDismissed", "1");
     setDismissed(true);
   };
 
-  if (dismissed || !loaded || missing.length === 0) return null;
-
-  const missingInternet = missing.some((m) => m.category === "Internet");
-  const missingRent = missing.some((m) => m.category === "Rent");
-  const lastInternetAmount = getLastAmount("Internet");
   const approved = getApprovedDeductions(expenses);
   const pending = getPendingDeductions(expenses);
   const adjustedRent = calculateAdjustedRent(baseRent, approved);
+
+  const missingInternet = missing.some((m) => m.category === "Internet");
+  const missingRent = missing.some((m) => m.category === "Rent");
+
+  // Show banner if there are missing bills OR if there's a pending rent we can update
+  const showBanner =
+    !dismissed &&
+    loaded &&
+    (missingInternet || missingRent || pendingRent !== null);
+
+  if (!showBanner) return null;
+
+  const lastInternetAmount = getLastAmount("Internet");
 
   const now = new Date();
   const monthName = now.toLocaleString("en-US", { month: "long", year: "numeric" });
@@ -160,7 +211,7 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
         </div>
       )}
 
-      {/* Rent */}
+      {/* Rent — missing (create new entry) */}
       {missingRent && (
         <div className="bg-white rounded-lg p-3 space-y-2">
           <p className="text-sm font-medium text-gray-900">Rent</p>
@@ -191,6 +242,47 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
             className="w-full py-2 bg-orange-500 text-white text-sm font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center justify-center gap-1"
           >
             {addingRent ? <><Spinner className="h-4 w-4" /> Adding...</> : "Add Rent"}
+          </button>
+        </div>
+      )}
+
+      {/* Rent — exists but Pending (apply deductions + mark paid) */}
+      {!missingRent && pendingRent && (
+        <div className="bg-white rounded-lg p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-gray-900">Rent</p>
+            <span className="text-xs text-amber-600 font-medium">Unpaid</span>
+          </div>
+          <div className="text-xs space-y-1 text-gray-600">
+            <div className="flex justify-between">
+              <span>Base rent</span>
+              <span>MXN ${baseRent.toLocaleString()}</span>
+            </div>
+            {approved.map((d) => (
+              <div key={d.id} className="flex justify-between text-green-700">
+                <span className="truncate mr-2">- {d.item}</span>
+                <span className="shrink-0">-${d.karensOwes.toFixed(2)}</span>
+              </div>
+            ))}
+            {approved.length === 0 && (
+              <p className="text-gray-400 italic">No approved deductions</p>
+            )}
+            <div className="flex justify-between font-semibold text-gray-900 border-t border-gray-100 pt-1">
+              <span>Total</span>
+              <span>MXN ${adjustedRent.toLocaleString()}</span>
+            </div>
+          </div>
+          {pending.length > 0 && (
+            <p className="text-xs text-amber-600">
+              + {pending.length} item{pending.length !== 1 ? "s" : ""} pending Karen&apos;s approval
+            </p>
+          )}
+          <button
+            onClick={handlePayRent}
+            disabled={addingRent}
+            className="w-full py-2 bg-orange-500 text-white text-sm font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center justify-center gap-1"
+          >
+            {addingRent ? <><Spinner className="h-4 w-4" /> Updating...</> : "Apply deductions & mark paid"}
           </button>
         </div>
       )}

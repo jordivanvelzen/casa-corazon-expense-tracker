@@ -13,16 +13,17 @@ interface Deduction {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { date, deductions }: { date: string; deductions: Deduction[] } =
-      body;
+    const {
+      rentId,
+      date,
+      deductions,
+    }: { rentId?: string; date: string; deductions: Deduction[] } = body;
 
     const totalDeductions = deductions.reduce((sum, d) => sum + d.karenOwes, 0);
     const adjustedAmount = Math.max(
       0,
       Math.round((BASE_RENT - totalDeductions) * 100) / 100
     );
-
-    const item = generateItemName("Rent", "Recurring Bill", date);
 
     // Build breakdown note
     const noteLines = [`Base rent: $${BASE_RENT.toLocaleString()}`];
@@ -34,46 +35,52 @@ export async function POST(request: NextRequest) {
     }
     const notes = noteLines.join("\n");
 
-    // 1. Create rent entry
-    await notion.pages.create({
-      parent: { database_id: DATABASE_ID },
-      properties: {
-        Item: { title: [{ text: { content: item } }] },
-        "Amount (MXN)": { number: adjustedAmount },
-        "Karen Owes": { number: 0 },
-        Date: { date: { start: date } },
-        Category: { select: { name: "Rent" } },
-        "Paid By": { select: { name: "Nash & Jordi" } },
-        Split: { select: { name: "N&J only" } },
-        Type: { select: { name: "Recurring Bill" } },
-        Status: { select: { name: "Paid" } },
-        "To discuss": { checkbox: false },
-        Notes: { rich_text: [{ text: { content: notes } }] },
-      } as Parameters<typeof notion.pages.create>[0]["properties"],
-    });
-
-    if (deductions.length === 0) {
-      return NextResponse.json({
-        success: true,
-        adjustedAmount,
-        deductionsCount: 0,
+    if (rentId) {
+      // ── UPDATE existing pending rent entry ──
+      await notion.pages.update({
+        page_id: rentId,
+        properties: {
+          "Amount (MXN)": { number: adjustedAmount },
+          Status: { select: { name: "Paid" } },
+          Notes: { rich_text: [{ text: { content: notes } }] },
+        } as Parameters<typeof notion.pages.update>[0]["properties"],
+      });
+    } else {
+      // ── CREATE new rent entry ──
+      const item = generateItemName("Rent", "Recurring Bill", date);
+      await notion.pages.create({
+        parent: { database_id: DATABASE_ID },
+        properties: {
+          Item: { title: [{ text: { content: item } }] },
+          "Amount (MXN)": { number: adjustedAmount },
+          "Karen Owes": { number: 0 },
+          Date: { date: { start: date } },
+          Category: { select: { name: "Rent" } },
+          "Paid By": { select: { name: "Nash & Jordi" } },
+          Split: { select: { name: "N&J only" } },
+          Type: { select: { name: "Recurring Bill" } },
+          Status: { select: { name: "Paid" } },
+          "To discuss": { checkbox: false },
+          Notes: { rich_text: [{ text: { content: notes } }] },
+        } as Parameters<typeof notion.pages.create>[0]["properties"],
       });
     }
 
-    // 2. Build settlement name: "Settlement Mar 26 · Rent"
+    // ── Create Settlement entry for deductions (if any) ──
+    if (deductions.length === 0) {
+      return NextResponse.json({ success: true, adjustedAmount, deductionsCount: 0 });
+    }
+
     const d = new Date(date + "T00:00:00");
     const month = d.toLocaleString("en-US", { month: "short" });
     const year = String(d.getFullYear()).slice(-2);
     const settlementName = `Settlement ${month} ${year} · Rent`;
 
-    // 3. Create Settlement entry for the deductions
     const settlementPage = await notion.pages.create({
       parent: { database_id: DATABASE_ID },
       properties: {
         Item: { title: [{ text: { content: settlementName } }] },
-        "Amount (MXN)": {
-          number: Math.round(totalDeductions * 100) / 100,
-        },
+        "Amount (MXN)": { number: Math.round(totalDeductions * 100) / 100 },
         "Karen Owes": { number: 0 },
         Date: { date: { start: date } },
         Type: { select: { name: "Settlement" } },
@@ -85,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     const settlementId = settlementPage.id;
 
-    // 4. Link each deduction to the Settlement entry
+    // Link each deduction to the Settlement entry
     for (const ded of deductions) {
       await notion.pages.update({
         page_id: ded.id,
@@ -102,9 +109,9 @@ export async function POST(request: NextRequest) {
       settlementId,
     });
   } catch (error) {
-    console.error("Failed to create rent entry:", error);
+    console.error("Failed to process rent:", error);
     return NextResponse.json(
-      { error: "Failed to create rent entry" },
+      { error: "Failed to process rent" },
       { status: 500 }
     );
   }
