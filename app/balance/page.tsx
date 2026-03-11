@@ -14,10 +14,9 @@ import Toast from "@/components/Toast";
 interface MonthlyBreakdown {
   key: string;
   label: string;
-  karenShare: number;
-  njShare: number;
+  karenPaid: number;
+  njPaid: number;
   monthlyNet: number;
-  runningTotal: number;
   settled: boolean;
 }
 
@@ -120,7 +119,6 @@ export default function BalancePage() {
   const sortedMonths = Array.from(monthlyMap.entries()).sort(([a], [b]) =>
     b.localeCompare(a)
   );
-  let runningTotal = 0;
 
   const monthlyBreakdowns: MonthlyBreakdown[] = [];
   const chronological = [...sortedMonths].reverse();
@@ -131,26 +129,26 @@ export default function BalancePage() {
       year: "numeric",
     });
 
-    let karenShare = 0;
-    let njShare = 0;
+    let karenPaid = 0;
+    let njPaid = 0;
+    let netDebt = 0;
     let allSettled = true;
 
     for (const e of monthExpenses) {
-      if (e.karensOwes > 0) karenShare += e.karensOwes;
-      else if (e.karensOwes < 0) njShare += Math.abs(e.karensOwes);
+      if (e.paidBy === "Karen") karenPaid += e.amount;
+      else if (e.paidBy === "Nash & Jordi") njPaid += e.amount;
+      netDebt += e.karensOwes;
       if (e.settlement.length === 0) allSettled = false;
     }
 
-    const monthlyNet = Math.round((karenShare - njShare) * 100) / 100;
-    runningTotal = Math.round((runningTotal + monthlyNet) * 100) / 100;
+    const monthlyNet = Math.round(netDebt * 100) / 100;
 
     monthlyBreakdowns.push({
       key,
       label,
-      karenShare: Math.round(karenShare * 100) / 100,
-      njShare: Math.round(njShare * 100) / 100,
+      karenPaid: Math.round(karenPaid * 100) / 100,
+      njPaid: Math.round(njPaid * 100) / 100,
       monthlyNet,
-      runningTotal,
       settled: allSettled,
     });
   }
@@ -466,16 +464,13 @@ export default function BalancePage() {
               <tr className="border-b border-gray-200 text-left">
                 <th className="py-2 pr-3 font-medium text-gray-500">Month</th>
                 <th className="py-2 pr-3 font-medium text-gray-500 text-right">
-                  Karen
+                  Paid by Karen
                 </th>
                 <th className="py-2 pr-3 font-medium text-gray-500 text-right">
-                  N&J
-                </th>
-                <th className="py-2 pr-3 font-medium text-gray-500 text-right">
-                  Net
+                  Paid by N&J
                 </th>
                 <th className="py-2 font-medium text-gray-500 text-right">
-                  Running
+                  Net
                 </th>
               </tr>
             </thead>
@@ -488,14 +483,14 @@ export default function BalancePage() {
                       <span className="ml-1 text-green-500">\u2713</span>
                     )}
                   </td>
-                  <td className="py-2.5 pr-3 text-right text-green-600">
-                    ${m.karenShare.toFixed(2)}
+                  <td className="py-2.5 pr-3 text-right text-gray-700">
+                    {m.karenPaid > 0 ? `$${m.karenPaid.toFixed(2)}` : "—"}
                   </td>
-                  <td className="py-2.5 pr-3 text-right text-orange-600">
-                    ${m.njShare.toFixed(2)}
+                  <td className="py-2.5 pr-3 text-right text-gray-700">
+                    {m.njPaid > 0 ? `$${m.njPaid.toFixed(2)}` : "—"}
                   </td>
                   <td
-                    className={`py-2.5 pr-3 text-right font-medium ${
+                    className={`py-2.5 text-right font-semibold ${
                       m.monthlyNet > 0
                         ? "text-green-600"
                         : m.monthlyNet < 0
@@ -508,21 +503,6 @@ export default function BalancePage() {
                       : m.monthlyNet > 0
                       ? `Karen $${m.monthlyNet.toFixed(2)}`
                       : `N&J $${Math.abs(m.monthlyNet).toFixed(2)}`}
-                  </td>
-                  <td
-                    className={`py-2.5 text-right font-semibold ${
-                      m.runningTotal > 0
-                        ? "text-green-700"
-                        : m.runningTotal < 0
-                        ? "text-orange-700"
-                        : "text-gray-400"
-                    }`}
-                  >
-                    {m.runningTotal === 0
-                      ? "—"
-                      : m.runningTotal > 0
-                      ? `Karen $${m.runningTotal.toFixed(2)}`
-                      : `N&J $${Math.abs(m.runningTotal).toFixed(2)}`}
                   </td>
                 </tr>
               ))}
