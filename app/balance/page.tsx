@@ -375,7 +375,7 @@ export default function BalancePage() {
           >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-red-600 mb-1">Nash &amp; Jordi paid</p>
+                <p className="text-sm text-red-600 mb-1">Nash &amp; Jordi&apos;s contribution</p>
                 <p className="text-2xl font-bold text-red-700">
                   MXN ${njOnlyTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </p>
