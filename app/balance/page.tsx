@@ -368,26 +368,26 @@ export default function BalancePage() {
 
       {/* Nash & Jordi paid — red, collapsible */}
       {njOnlyTotal > 0 && (
-        <div className="rounded-xl mb-2 overflow-hidden bg-red-50 border border-red-200">
+        <div className="rounded-xl mb-2 overflow-hidden bg-orange-50 border border-orange-200">
           <button
             onClick={() => setNJExpanded(!njExpanded)}
             className="w-full p-5 text-left"
           >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-red-600 mb-1">Nash &amp; Jordi&apos;s contribution</p>
-                <p className="text-2xl font-bold text-red-700">
+                <p className="text-sm text-orange-600 mb-1">Nash &amp; Jordi&apos;s contribution</p>
+                <p className="text-2xl font-bold text-orange-700">
                   MXN ${njOnlyTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </p>
               </div>
               {njMonths.length > 0 && (
-                <Chevron open={njExpanded} className="text-red-300 mt-1.5 ml-3 shrink-0" />
+                <Chevron open={njExpanded} className="text-orange-300 mt-1.5 ml-3 shrink-0" />
               )}
             </div>
           </button>
 
           {njExpanded && njMonths.length > 0 && (
-            <div className="border-t border-red-100 px-4 py-3 space-y-0.5">
+            <div className="border-t border-orange-100 px-4 py-3 space-y-0.5">
               {njMonths.map((m) => {
                 const open = expandedNJMonth === m.key;
                 return (
@@ -397,10 +397,10 @@ export default function BalancePage() {
                       className="w-full flex items-center justify-between py-2 text-sm"
                     >
                       <span className="flex items-center gap-1.5 text-gray-700">
-                        <Chevron open={open} className="text-red-300" />
+                        <Chevron open={open} className="text-orange-300" />
                         {m.label}
                       </span>
-                      <span className="font-medium text-red-700">
+                      <span className="font-medium text-orange-700">
                         ${m.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                       </span>
                     </button>
@@ -412,7 +412,7 @@ export default function BalancePage() {
                               {e.item}
                               {e.date && <span className="text-gray-400"> · {fmtDate(e.date)}</span>}
                             </span>
-                            <span className="shrink-0 font-medium text-red-600">
+                            <span className="shrink-0 font-medium text-orange-600">
                               ${e.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                             </span>
                           </div>
