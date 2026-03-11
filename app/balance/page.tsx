@@ -503,7 +503,11 @@ export default function BalancePage() {
                         : "text-gray-400"
                     }`}
                   >
-                    {m.monthlyNet > 0 ? "+" : ""}${m.monthlyNet.toFixed(2)}
+                    {m.monthlyNet === 0
+                      ? "—"
+                      : m.monthlyNet > 0
+                      ? `Karen $${m.monthlyNet.toFixed(2)}`
+                      : `N&J $${Math.abs(m.monthlyNet).toFixed(2)}`}
                   </td>
                   <td
                     className={`py-2.5 text-right font-semibold ${
@@ -514,7 +518,11 @@ export default function BalancePage() {
                         : "text-gray-400"
                     }`}
                   >
-                    ${m.runningTotal.toFixed(2)}
+                    {m.runningTotal === 0
+                      ? "—"
+                      : m.runningTotal > 0
+                      ? `Karen $${m.runningTotal.toFixed(2)}`
+                      : `N&J $${Math.abs(m.runningTotal).toFixed(2)}`}
                   </td>
                 </tr>
               ))}

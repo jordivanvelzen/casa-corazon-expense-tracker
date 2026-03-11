@@ -111,10 +111,10 @@ export default function ReviewPage() {
     try {
       const actionLabel =
         expense.karensOwes > 0
-          ? "Karen approved"
+          ? "Approved by Karen"
           : expense.karensOwes < 0
-          ? "Nash & Jordi approved"
-          : "Resolved";
+          ? "Approved by Nash & Jordi"
+          : "Approved";
       const decision = formatDecision(actionLabel, approveComment);
       const newNotes = appendDecision(expense.notes, decision);
       await patch(id, { toDiscuss: false, notes: newNotes });
@@ -256,10 +256,10 @@ export default function ReviewPage() {
 
                   const approveLabel =
                     expense.karensOwes > 0
-                      ? "Karen approves"
+                      ? "Approved by Karen"
                       : expense.karensOwes < 0
-                      ? "Nash & Jordi approve"
-                      : "Resolved";
+                      ? "Approved by Nash & Jordi"
+                      : "Approve";
 
                   const approveColor =
                     expense.karensOwes > 0
