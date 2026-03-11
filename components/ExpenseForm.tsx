@@ -130,8 +130,8 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
         const fd = new FormData();
         fd.append("file", imageFile);
         const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
-        if (!uploadRes.ok) throw new Error("Image upload failed");
         const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.details || uploadData.error || "Image upload failed");
         imageUrl = uploadData.url;
       }
 
@@ -163,8 +163,9 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
       setNotes("");
       handleRemoveImage();
       onSuccess();
-    } catch {
-      alert("Failed to add expense. Please try again.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      alert(`Failed: ${msg}`);
     } finally {
       setSubmitting(false);
     }
