@@ -409,10 +409,6 @@ export default function BalancePage() {
         const pending = getPendingDeductions(expenses);
         if (approved.length === 0 && pending.length === 0) return null;
         const adjustedRent = calculateAdjustedRent(baseRent, approved);
-        const pendingTotal =
-          Math.round(
-            pending.reduce((s, e) => s + e.karensOwes, 0) * 100
-          ) / 100;
         return (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
             <h2 className="text-sm font-semibold text-blue-800 mb-2">
@@ -442,7 +438,7 @@ export default function BalancePage() {
             {pending.length > 0 && (
               <p className="mt-2 text-xs text-amber-600">
                 + {pending.length} item{pending.length !== 1 ? "s" : ""}{" "}
-                pending approval (${pendingTotal.toFixed(2)}){" "}
+                pending approval{" "}
                 <Link href="/review" className="underline">
                   Review
                 </Link>
