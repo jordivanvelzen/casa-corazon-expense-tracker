@@ -60,13 +60,9 @@ function getRelation(page: PageObjectResponse, name: string): string[] {
   return [];
 }
 
-function getFiles(page: PageObjectResponse, name: string): string | null {
+function getUrl(page: PageObjectResponse, name: string): string | null {
   const prop = page.properties[name];
-  if (prop?.type === "files" && prop.files.length > 0) {
-    const f = prop.files[0];
-    if (f.type === "external") return f.external.url;
-    if (f.type === "file") return f.file.url;
-  }
+  if (prop?.type === "url" && prop.url) return prop.url;
   return null;
 }
 
@@ -87,7 +83,7 @@ function mapPageToExpense(page: PageObjectResponse): Expense {
     toDiscuss: getCheckbox(page, "To discuss"),
     notes: getRichText(page, "Notes"),
     settlement: getRelation(page, "Settlement"),
-    imageUrl: getFiles(page, "Image"),
+    imageUrl: getUrl(page, "Image"),
   };
 }
 
@@ -200,9 +196,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.imageUrl) {
-      properties.Image = {
-        files: [{ name: "photo.jpg", type: "external", external: { url: body.imageUrl } }],
-      };
+      properties.Image = { url: body.imageUrl };
     }
 
     const response = await notion.pages.create({

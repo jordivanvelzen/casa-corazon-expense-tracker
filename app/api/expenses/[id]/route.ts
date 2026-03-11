@@ -42,9 +42,7 @@ export async function PATCH(
     }
 
     if (body.imageUrl !== undefined) {
-      properties.Image = body.imageUrl
-        ? { files: [{ name: "photo.jpg", type: "external", external: { url: body.imageUrl } }] }
-        : { files: [] };
+      properties.Image = { url: body.imageUrl ?? null };
     }
 
     await notion.pages.update({
