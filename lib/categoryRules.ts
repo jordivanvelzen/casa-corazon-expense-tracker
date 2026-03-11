@@ -17,7 +17,7 @@ export const CATEGORY_RULES: Record<Category, CategoryRule> = {
   "House Supplies": { split: "Shared (all 3)", paidBy: "Nash & Jordi" },
   Pet: { split: "Shared (all 3)", paidBy: "Nash & Jordi" },
   Maintenance: { split: "Shared (all 3)", paidBy: "Nash & Jordi" },
-  Loan: { split: "N&J only", paidBy: "Nash & Jordi" },
+  Loan: { split: null, paidBy: null },
   Other: { split: null, paidBy: null },
 };
 

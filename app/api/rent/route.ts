@@ -13,7 +13,8 @@ interface Deduction {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { date, deductions }: { date: string; deductions: Deduction[] } = body;
+    const { date, deductions }: { date: string; deductions: Deduction[] } =
+      body;
 
     const totalDeductions = deductions.reduce((sum, d) => sum + d.karenOwes, 0);
     const adjustedAmount = Math.max(
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     const notes = noteLines.join("\n");
 
     // 1. Create rent entry
-    const rentPage = await notion.pages.create({
+    await notion.pages.create({
       parent: { database_id: DATABASE_ID },
       properties: {
         Item: { title: [{ text: { content: item } }] },
@@ -51,23 +52,54 @@ export async function POST(request: NextRequest) {
       } as Parameters<typeof notion.pages.create>[0]["properties"],
     });
 
-    const rentId = rentPage.id;
+    if (deductions.length === 0) {
+      return NextResponse.json({
+        success: true,
+        adjustedAmount,
+        deductionsCount: 0,
+      });
+    }
 
-    // 2. Link each deduction to the rent entry via Settlement relation
-    for (const d of deductions) {
+    // 2. Build settlement name: "Settlement Mar 26 · Rent"
+    const d = new Date(date + "T00:00:00");
+    const month = d.toLocaleString("en-US", { month: "short" });
+    const year = String(d.getFullYear()).slice(-2);
+    const settlementName = `Settlement ${month} ${year} · Rent`;
+
+    // 3. Create Settlement entry for the deductions
+    const settlementPage = await notion.pages.create({
+      parent: { database_id: DATABASE_ID },
+      properties: {
+        Item: { title: [{ text: { content: settlementName } }] },
+        "Amount (MXN)": {
+          number: Math.round(totalDeductions * 100) / 100,
+        },
+        "Karen Owes": { number: 0 },
+        Date: { date: { start: date } },
+        Type: { select: { name: "Settlement" } },
+        "Settlement Method": { select: { name: "Rent deduction" } },
+        Status: { select: { name: "Paid" } },
+        "To discuss": { checkbox: false },
+      } as Parameters<typeof notion.pages.create>[0]["properties"],
+    });
+
+    const settlementId = settlementPage.id;
+
+    // 4. Link each deduction to the Settlement entry
+    for (const ded of deductions) {
       await notion.pages.update({
-        page_id: d.id,
+        page_id: ded.id,
         properties: {
-          Settlement: { relation: [{ id: rentId }] },
+          Settlement: { relation: [{ id: settlementId }] },
         } as Parameters<typeof notion.pages.update>[0]["properties"],
       });
     }
 
     return NextResponse.json({
       success: true,
-      rentId,
       adjustedAmount,
       deductionsCount: deductions.length,
+      settlementId,
     });
   } catch (error) {
     console.error("Failed to create rent entry:", error);

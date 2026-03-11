@@ -1,11 +1,21 @@
-import { Split, PaidBy } from "./types";
+import { Split, PaidBy, Category } from "./types";
 
 export function calculateKarenOwes(
   amount: number,
   split: Split | null,
-  paidBy: PaidBy | null
+  paidBy: PaidBy | null,
+  category?: Category | null
 ): number {
-  if (!split || !paidBy) return 0;
+  if (!paidBy) return 0;
+
+  // Loan category: full amount to the other party
+  if (category === "Loan") {
+    if (paidBy === "Nash & Jordi") return Math.round(amount * 100) / 100;
+    if (paidBy === "Karen") return -Math.round(amount * 100) / 100;
+    return 0;
+  }
+
+  if (!split) return 0;
 
   if (split === "N&J only" || split === "Karen only") return 0;
 

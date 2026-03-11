@@ -76,13 +76,15 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
 
   const karenOwes = calculateKarenOwes(
     parseFloat(amount) || 0,
-    split,
-    paidBy
+    category === "Loan" ? null : split,
+    paidBy,
+    category
   );
 
   const debtPreview = (() => {
     const amt = parseFloat(amount) || 0;
-    if (amt === 0 || !split || !paidBy) return null;
+    if (amt === 0 || !paidBy) return null;
+    if (category !== "Loan" && !split) return null;
     if (karenOwes > 0)
       return { text: `Karen owes MXN $${karenOwes.toFixed(2)}`, color: "text-green-600" };
     if (karenOwes < 0)
@@ -107,7 +109,7 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
           date,
           category,
           paidBy,
-          split,
+          split: category === "Loan" ? null : split,
           type,
           status,
           toDiscuss,
@@ -210,7 +212,7 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
       </div>
 
       {/* Split */}
-      {category !== "Rent" && (
+      {category !== "Rent" && category !== "Loan" && (
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-2">Split</label>
           <div className="flex rounded-xl bg-gray-100 p-1">
@@ -231,6 +233,13 @@ export default function ExpenseForm({ currentUser, onSuccess }: ExpenseFormProps
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Loan info */}
+      {category === "Loan" && (
+        <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-blue-700">
+          Full amount owed by the other party
         </div>
       )}
 

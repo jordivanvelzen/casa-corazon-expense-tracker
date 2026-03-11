@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const karensOwes = calculateKarenOwes(body.amount, body.split, body.paidBy);
+    const karensOwes = calculateKarenOwes(body.amount, body.split, body.paidBy, body.category);
 
     const properties: Record<string, unknown> = {
       Item: {

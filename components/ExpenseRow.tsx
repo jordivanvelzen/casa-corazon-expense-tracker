@@ -33,17 +33,6 @@ export default function ExpenseRow({
             )}
             {dateStr && <span>{dateStr}</span>}
             {expense.paidBy && <span>· {expense.paidBy}</span>}
-            {expense.split === "Deduct from rent" && expense.settlement.length === 0 && (
-              <span
-                className={`rounded-full px-2 py-0.5 ${
-                  expense.toDiscuss
-                    ? "bg-amber-100 text-amber-700"
-                    : "bg-green-100 text-green-700"
-                }`}
-              >
-                {expense.toDiscuss ? "Rent ?" : "Rent \u2713"}
-              </span>
-            )}
           </div>
         </div>
         <div className="text-right shrink-0">

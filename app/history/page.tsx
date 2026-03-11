@@ -8,8 +8,7 @@ import Spinner from "@/components/Spinner";
 export default function HistoryPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<"unsettled" | "all">("unsettled");
-  const [selectedSettlement, setSelectedSettlement] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/expenses")
@@ -24,7 +23,6 @@ export default function HistoryPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Settlement rows (Type = "Settlement")
   const settlements = useMemo(
     () =>
       expenses
@@ -33,32 +31,21 @@ export default function HistoryPage() {
     [expenses]
   );
 
-  // Filtered expenses
-  const filtered = useMemo(() => {
-    if (selectedSettlement) {
-      const settlement = expenses.find((e) => e.id === selectedSettlement);
-      if (!settlement) return [];
-      // Show expenses whose settlement array contains this settlement ID
-      return expenses.filter(
-        (e) => e.settlement.includes(selectedSettlement) && e.id !== selectedSettlement
-      );
-    }
-
-    if (viewMode === "unsettled") {
-      return expenses
+  const unsettled = useMemo(
+    () =>
+      expenses
         .filter((e) => e.settlement.length === 0 && e.type !== "Settlement")
-        .sort((a, b) => b.date.localeCompare(a.date));
-    }
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [expenses]
+  );
 
-    // "all" mode
-    return expenses
-      .filter((e) => e.type !== "Settlement")
-      .sort((a, b) => b.date.localeCompare(a.date));
-  }, [expenses, viewMode, selectedSettlement]);
-
-  const selectedSettlementData = selectedSettlement
-    ? expenses.find((e) => e.id === selectedSettlement)
-    : null;
+  const unsettledNet = useMemo(
+    () =>
+      Math.round(
+        unsettled.reduce((sum, e) => sum + e.karensOwes, 0) * 100
+      ) / 100,
+    [unsettled]
+  );
 
   if (loading) {
     return (
@@ -68,89 +55,126 @@ export default function HistoryPage() {
     );
   }
 
+  const toggle = (id: string) =>
+    setExpandedId((prev) => (prev === id ? null : id));
+
   return (
     <div className="px-4 pt-4 pb-24">
       <h1 className="text-xl font-bold text-gray-900 mb-4">History</h1>
 
-      {/* View toggle */}
-      <div className="flex rounded-xl bg-gray-100 p-1 mb-4">
-        {(["unsettled", "all"] as const).map((mode) => (
-          <button
-            key={mode}
-            onClick={() => {
-              setViewMode(mode);
-              setSelectedSettlement(null);
-            }}
-            className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all capitalize ${
-              viewMode === mode && !selectedSettlement
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500"
-            }`}
-          >
-            {mode}
-          </button>
-        ))}
-      </div>
-
-      {/* Settlement filter */}
-      {settlements.length > 0 && (
-        <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-500 mb-2">
-            Filter by Settlement
-          </label>
-          <select
-            value={selectedSettlement || ""}
-            onChange={(e) => {
-              setSelectedSettlement(e.target.value || null);
-              if (e.target.value) setViewMode("all");
-            }}
-            className="w-full h-12 px-4 rounded-xl border border-gray-200 text-sm bg-white"
-          >
-            <option value="">No filter</option>
-            {settlements.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.item} — {new Date(s.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* Selected settlement summary */}
-      {selectedSettlementData && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-          <p className="text-sm font-semibold text-blue-800">
-            {selectedSettlementData.item}
-          </p>
-          <div className="flex gap-4 mt-1 text-xs text-blue-600">
-            <span>Amount: ${selectedSettlementData.amount.toFixed(2)}</span>
-            {selectedSettlementData.settlementMethod && (
-              <span>Method: {selectedSettlementData.settlementMethod}</span>
-            )}
-            <span>
-              {new Date(selectedSettlementData.date + "T00:00:00").toLocaleDateString(
-                "en-US",
-                { month: "short", day: "numeric", year: "numeric" }
-              )}
+      {/* ── Unsettled card ── */}
+      <div className="mb-3 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <button
+          onClick={() => toggle("__unsettled__")}
+          className="w-full flex items-center justify-between px-4 py-3 text-left"
+        >
+          <div>
+            <span className="font-semibold text-gray-900">Unsettled</span>
+            <span className="ml-2 text-xs text-gray-400">
+              {unsettled.length} item{unsettled.length !== 1 ? "s" : ""}
             </span>
           </div>
-        </div>
-      )}
+          <div className="flex items-center gap-3">
+            <span
+              className={`text-sm font-semibold ${
+                unsettledNet > 0
+                  ? "text-green-600"
+                  : unsettledNet < 0
+                  ? "text-orange-600"
+                  : "text-gray-400"
+              }`}
+            >
+              MXN ${Math.abs(unsettledNet).toFixed(2)}
+            </span>
+            <span className="text-gray-400 text-sm">
+              {expandedId === "__unsettled__" ? "▲" : "▼"}
+            </span>
+          </div>
+        </button>
+        {expandedId === "__unsettled__" && (
+          <div className="border-t border-gray-100 px-4 py-3 space-y-3">
+            {unsettled.length === 0 ? (
+              <p className="text-sm text-gray-400">All settled ✓</p>
+            ) : (
+              unsettled.map((e) => (
+                <ExpenseRow key={e.id} expense={e} showKarenOwes />
+              ))
+            )}
+          </div>
+        )}
+      </div>
 
-      {/* Expense list */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500 text-sm">No expenses found</p>
-        </div>
+      {/* ── Settlement cards ── */}
+      {settlements.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-6">
+          No settlements yet
+        </p>
       ) : (
         <div className="space-y-3">
-          {filtered.map((expense) => (
-            <ExpenseRow
-              key={expense.id}
-              expense={expense}
-              showKarenOwes
-            />
-          ))}
+          {settlements.map((s) => {
+            const linked = expenses.filter(
+              (e) => e.settlement.includes(s.id) && e.id !== s.id
+            );
+            const isExpanded = expandedId === s.id;
+            const dateStr = s.date
+              ? new Date(s.date + "T00:00:00").toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : "";
+
+            return (
+              <div
+                key={s.id}
+                className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              >
+                <button
+                  onClick={() => toggle(s.id)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-left"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 truncate">
+                      {s.item}
+                    </p>
+                    <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                      <span>{dateStr}</span>
+                      {s.settlementMethod && (
+                        <span>· {s.settlementMethod}</span>
+                      )}
+                      <span>
+                        · {linked.length} linked
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 ml-3 shrink-0">
+                    <span className="text-sm font-semibold text-gray-700">
+                      MXN $
+                      {s.amount.toLocaleString("en-US", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                    <span className="text-gray-400 text-sm">
+                      {isExpanded ? "▲" : "▼"}
+                    </span>
+                  </div>
+                </button>
+                {isExpanded && (
+                  <div className="border-t border-gray-100 px-4 py-3 space-y-3">
+                    {linked.length === 0 ? (
+                      <p className="text-sm text-gray-400">
+                        No linked expenses
+                      </p>
+                    ) : (
+                      linked.map((e) => (
+                        <ExpenseRow key={e.id} expense={e} showKarenOwes />
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

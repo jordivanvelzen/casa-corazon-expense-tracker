@@ -25,6 +25,16 @@ export async function PATCH(
       };
     }
 
+    if (body.split !== undefined) {
+      properties.Split = body.split
+        ? { select: { name: body.split } }
+        : { select: null };
+    }
+
+    if (body.karensOwes !== undefined) {
+      properties["Karen Owes"] = { number: body.karensOwes };
+    }
+
     if (body.settlement !== undefined) {
       properties.Settlement = {
         relation: body.settlement.map((sid: string) => ({ id: sid })),

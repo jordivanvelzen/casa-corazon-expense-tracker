@@ -8,6 +8,7 @@ export type Status = "Paid" | "Pending";
 
 export type SettlementMethod =
   | "Direct payment"
+  | "Cash payment"
   | "Rent deduction"
   | "Bank transfer";
 
