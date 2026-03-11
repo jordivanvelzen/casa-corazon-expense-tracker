@@ -220,9 +220,10 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   } catch (error) {
-    console.error("Failed to create expense:", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("Failed to create expense:", msg, error);
     return NextResponse.json(
-      { error: "Failed to create expense" },
+      { error: "Failed to create expense", details: msg },
       { status: 500 }
     );
   }
