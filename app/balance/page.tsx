@@ -21,6 +21,14 @@ interface CategoryBreakdown {
   items: Expense[];
 }
 
+interface SimpleMonthGroup {
+  key: string;
+  label: string;
+  total: number;
+  net: number;
+  items: Expense[];
+}
+
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -33,6 +41,30 @@ function autoSettlementName(date: string): string {
   return `Settlement ${month} ${year}`;
 }
 
+function groupByMonth(items: Expense[], valueKey: "amount" | "karensOwes"): SimpleMonthGroup[] {
+  const map = new Map<string, Expense[]>();
+  for (const e of items) {
+    if (!e.date) continue;
+    const d = new Date(e.date + "T00:00:00");
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(e);
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([key, exps]) => {
+      const d = new Date(key + "-01T00:00:00");
+      const label = d.toLocaleString("en-US", { month: "long", year: "numeric" });
+      const total = Math.round(exps.reduce((s, e) => s + e.amount, 0) * 100) / 100;
+      const net = Math.round(exps.reduce((s, e) => s + e[valueKey], 0) * 100) / 100;
+      return { key, label, total, net, items: [...exps].sort((a, b) => b.date.localeCompare(a.date)) };
+    });
+}
+
+function fmtDate(date: string) {
+  return new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 export default function BalancePage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,19 +72,18 @@ export default function BalancePage() {
   // Create settlement state
   const [showCreate, setShowCreate] = useState(false);
   const [settlDate, setSettlDate] = useState(todayStr);
-  const [settlMethod, setSettlMethod] = useState<
-    "Cash payment" | "Bank transfer"
-  >("Cash payment");
+  const [settlMethod, setSettlMethod] = useState<"Cash payment" | "Bank transfer">("Cash payment");
   const [settlName, setSettlName] = useState("");
   const [creating, setCreating] = useState(false);
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  // Collapsible category / month
+  // Collapsible state
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+  const [netExpanded, setNetExpanded] = useState(false);
+  const [expandedNetMonth, setExpandedNetMonth] = useState<string | null>(null);
+  const [njExpanded, setNJExpanded] = useState(false);
+  const [expandedNJMonth, setExpandedNJMonth] = useState<string | null>(null);
 
   const fetchAll = useCallback(() => {
     return fetch("/api/expenses")
@@ -73,15 +104,22 @@ export default function BalancePage() {
 
   // Exclude toDiscuss from unsettled balance
   const unsettled = expenses.filter(
-    (e) =>
-      e.settlement.length === 0 &&
-      e.type !== "Settlement" &&
-      !e.toDiscuss
+    (e) => e.settlement.length === 0 && e.type !== "Settlement" && !e.toDiscuss
   );
 
   // Net balance
   const netBalance = unsettled.reduce((sum, e) => sum + e.karensOwes, 0);
   const roundedBalance = Math.round(netBalance * 100) / 100;
+
+  // Net balance monthly groups (for collapsible net card)
+  const netMonths = groupByMonth(unsettled, "karensOwes");
+
+  // N&J only expenses
+  const njOnlyExpenses = expenses.filter(
+    (e) => e.split === "N&J only" && e.type !== "Settlement"
+  );
+  const njOnlyTotal = Math.round(njOnlyExpenses.reduce((s, e) => s + e.amount, 0) * 100) / 100;
+  const njMonths = groupByMonth(njOnlyExpenses, "amount");
 
   // Last settlement
   const lastSettlement = expenses
@@ -90,8 +128,7 @@ export default function BalancePage() {
 
   const daysAgo = lastSettlement
     ? Math.floor(
-        (new Date().getTime() -
-          new Date(lastSettlement.date + "T00:00:00").getTime()) /
+        (new Date().getTime() - new Date(lastSettlement.date + "T00:00:00").getTime()) /
           (1000 * 60 * 60 * 24)
       )
     : null;
@@ -108,20 +145,14 @@ export default function BalancePage() {
     monthlyMap.get(key)!.expenses.push(e);
   }
 
-  const sortedMonths = Array.from(monthlyMap.entries()).sort(([a], [b]) =>
-    b.localeCompare(a)
-  );
+  const sortedMonths = Array.from(monthlyMap.entries()).sort(([a], [b]) => b.localeCompare(a));
 
   const monthlyBreakdowns: MonthlyBreakdown[] = [];
   const chronological = [...sortedMonths].reverse();
   for (const [, { expenses: monthExpenses, key }] of chronological) {
     const d = new Date(key + "-01T00:00:00");
-    const label = d.toLocaleString("en-US", {
-      month: "long",
-      year: "numeric",
-    });
+    const label = d.toLocaleString("en-US", { month: "long", year: "numeric" });
 
-    // Only count "Shared (all 3)" items in the paid / net columns
     const sharedExpenses = monthExpenses
       .filter((e) => e.split === "Shared (all 3)")
       .sort((a, b) => b.date.localeCompare(a.date));
@@ -138,14 +169,12 @@ export default function BalancePage() {
       if (e.settlement.length === 0) allSettled = false;
     }
 
-    const monthlyNet = Math.round(netDebt * 100) / 100;
-
     monthlyBreakdowns.push({
       key,
       label,
       karenPaid: Math.round(karenPaid * 100) / 100,
       njPaid: Math.round(njPaid * 100) / 100,
-      monthlyNet,
+      monthlyNet: Math.round(netDebt * 100) / 100,
       settled: allSettled,
       sharedExpenses,
     });
@@ -163,9 +192,7 @@ export default function BalancePage() {
     entry.items.push(e);
   }
 
-  const categoryBreakdowns: CategoryBreakdown[] = Array.from(
-    categoryMap.entries()
-  )
+  const categoryBreakdowns: CategoryBreakdown[] = Array.from(categoryMap.entries())
     .map(([category, { total, items }]) => ({
       category,
       total: Math.round(total * 100) / 100,
@@ -182,9 +209,7 @@ export default function BalancePage() {
       e.type !== "Settlement"
   );
   const qualifyingNet =
-    Math.round(
-      qualifyingItems.reduce((sum, e) => sum + e.karensOwes, 0) * 100
-    ) / 100;
+    Math.round(qualifyingItems.reduce((sum, e) => sum + e.karensOwes, 0) * 100) / 100;
 
   const handleCreateSettlement = async () => {
     setCreating(true);
@@ -227,18 +252,14 @@ export default function BalancePage() {
   return (
     <div className="px-4 pt-4 pb-24">
       {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
       )}
 
       <h1 className="text-xl font-bold text-gray-900 mb-4">Balance</h1>
 
-      {/* Net balance */}
+      {/* Net balance — collapsible */}
       <div
-        className={`rounded-xl p-5 mb-2 ${
+        className={`rounded-xl mb-2 overflow-hidden ${
           roundedBalance > 0
             ? "bg-green-50 border border-green-200"
             : roundedBalance < 0
@@ -246,23 +267,155 @@ export default function BalancePage() {
             : "bg-gray-50 border border-gray-200"
         }`}
       >
-        <p className="text-sm text-gray-600 mb-1">Net Balance</p>
-        <p
-          className={`text-2xl font-bold ${
-            roundedBalance > 0
-              ? "text-green-700"
-              : roundedBalance < 0
-              ? "text-orange-700"
-              : "text-gray-500"
-          }`}
+        <button
+          onClick={() => setNetExpanded(!netExpanded)}
+          className="w-full p-5 text-left"
         >
-          {roundedBalance > 0
-            ? `Karen owes N&J — MXN $${roundedBalance.toFixed(2)}`
-            : roundedBalance < 0
-            ? `N&J owe Karen — MXN $${Math.abs(roundedBalance).toFixed(2)}`
-            : "All square \u2713"}
-        </p>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Net Balance</p>
+              <p
+                className={`text-2xl font-bold ${
+                  roundedBalance > 0
+                    ? "text-green-700"
+                    : roundedBalance < 0
+                    ? "text-orange-700"
+                    : "text-gray-500"
+                }`}
+              >
+                {roundedBalance > 0
+                  ? `Karen owes N&J — MXN $${roundedBalance.toFixed(2)}`
+                  : roundedBalance < 0
+                  ? `N&J owe Karen — MXN $${Math.abs(roundedBalance).toFixed(2)}`
+                  : "All square \u2713"}
+              </p>
+            </div>
+            {netMonths.length > 0 && (
+              <span className="text-gray-400 text-xs mt-1 ml-3 shrink-0">
+                {netExpanded ? "▲" : "▼"}
+              </span>
+            )}
+          </div>
+        </button>
+
+        {netExpanded && netMonths.length > 0 && (
+          <div className="border-t border-gray-200 px-4 py-3 space-y-0.5">
+            {netMonths.map((m) => {
+              const open = expandedNetMonth === m.key;
+              return (
+                <div key={m.key}>
+                  <button
+                    onClick={() => setExpandedNetMonth(open ? null : m.key)}
+                    className="w-full flex items-center justify-between py-2 text-sm"
+                  >
+                    <span className="flex items-center gap-1.5 text-gray-700">
+                      <span className="text-gray-300 text-xs">{open ? "▲" : "▼"}</span>
+                      {m.label}
+                    </span>
+                    <span
+                      className={`font-medium ${
+                        m.net > 0 ? "text-green-600" : m.net < 0 ? "text-orange-600" : "text-gray-400"
+                      }`}
+                    >
+                      {m.net === 0
+                        ? "—"
+                        : m.net > 0
+                        ? `Karen owes $${m.net.toFixed(2)}`
+                        : `N&J owe $${Math.abs(m.net).toFixed(2)}`}
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="ml-4 mb-1 space-y-0.5">
+                      {m.items.map((e) => (
+                        <div key={e.id} className="flex justify-between text-xs py-1 text-gray-600">
+                          <span className="truncate mr-2">
+                            {e.item}
+                            {e.date && <span className="text-gray-400"> · {fmtDate(e.date)}</span>}
+                          </span>
+                          <span
+                            className={`shrink-0 font-medium ${
+                              e.karensOwes > 0 ? "text-green-600" : e.karensOwes < 0 ? "text-orange-600" : "text-gray-400"
+                            }`}
+                          >
+                            {e.karensOwes === 0
+                              ? "—"
+                              : e.karensOwes > 0
+                              ? `+$${e.karensOwes.toFixed(2)}`
+                              : `-$${Math.abs(e.karensOwes).toFixed(2)}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Nash & Jordi paid — red, collapsible */}
+      {njOnlyTotal > 0 && (
+        <div className="rounded-xl mb-2 overflow-hidden bg-red-50 border border-red-200">
+          <button
+            onClick={() => setNJExpanded(!njExpanded)}
+            className="w-full p-5 text-left"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm text-red-600 mb-1">Nash &amp; Jordi paid</p>
+                <p className="text-2xl font-bold text-red-700">
+                  MXN ${njOnlyTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              {njMonths.length > 0 && (
+                <span className="text-gray-400 text-xs mt-1 ml-3 shrink-0">
+                  {njExpanded ? "▲" : "▼"}
+                </span>
+              )}
+            </div>
+          </button>
+
+          {njExpanded && njMonths.length > 0 && (
+            <div className="border-t border-red-100 px-4 py-3 space-y-0.5">
+              {njMonths.map((m) => {
+                const open = expandedNJMonth === m.key;
+                return (
+                  <div key={m.key}>
+                    <button
+                      onClick={() => setExpandedNJMonth(open ? null : m.key)}
+                      className="w-full flex items-center justify-between py-2 text-sm"
+                    >
+                      <span className="flex items-center gap-1.5 text-gray-700">
+                        <span className="text-gray-300 text-xs">{open ? "▲" : "▼"}</span>
+                        {m.label}
+                      </span>
+                      <span className="font-medium text-red-700">
+                        ${m.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </span>
+                    </button>
+                    {open && (
+                      <div className="ml-4 mb-1 space-y-0.5">
+                        {m.items.map((e) => (
+                          <div key={e.id} className="flex justify-between text-xs py-1 text-gray-600">
+                            <span className="truncate mr-2">
+                              {e.item}
+                              {e.date && <span className="text-gray-400"> · {fmtDate(e.date)}</span>}
+                            </span>
+                            <span className="shrink-0 font-medium text-red-600">
+                              ${e.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Last settlement info */}
       <p className="text-xs text-gray-400 mb-4 px-1">
@@ -287,22 +440,14 @@ export default function BalancePage() {
         <div className="mb-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-4">
           <h2 className="font-semibold text-gray-900">New Settlement</h2>
 
-          {/* Qualifying items list */}
           {qualifyingItems.length === 0 ? (
             <p className="text-sm text-gray-400">No qualifying items</p>
           ) : (
             <div className="space-y-1">
               {qualifyingItems.map((e) => (
-                <div
-                  key={e.id}
-                  className="flex justify-between text-xs text-gray-600"
-                >
+                <div key={e.id} className="flex justify-between text-xs text-gray-600">
                   <span className="truncate mr-2">{e.item}</span>
-                  <span
-                    className={`shrink-0 ${
-                      e.karensOwes > 0 ? "text-green-600" : "text-orange-600"
-                    }`}
-                  >
+                  <span className={`shrink-0 ${e.karensOwes > 0 ? "text-green-600" : "text-orange-600"}`}>
                     {e.karensOwes > 0 ? "+" : ""}
                     {e.karensOwes.toFixed(2)}
                   </span>
@@ -310,11 +455,7 @@ export default function BalancePage() {
               ))}
               <div className="flex justify-between text-sm font-semibold border-t border-gray-100 pt-2 mt-1">
                 <span>Net</span>
-                <span
-                  className={
-                    qualifyingNet > 0 ? "text-green-700" : "text-orange-700"
-                  }
-                >
+                <span className={qualifyingNet > 0 ? "text-green-700" : "text-orange-700"}>
                   {qualifyingNet > 0
                     ? `Karen pays MXN $${qualifyingNet.toFixed(2)}`
                     : `N&J pay MXN $${Math.abs(qualifyingNet).toFixed(2)}`}
@@ -325,9 +466,7 @@ export default function BalancePage() {
 
           {/* Date */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Date
-            </label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Date</label>
             <input
               type="date"
               value={settlDate}
@@ -343,18 +482,14 @@ export default function BalancePage() {
 
           {/* Method */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Method
-            </label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Method</label>
             <div className="flex rounded-xl bg-gray-100 p-1">
               {(["Cash payment", "Bank transfer"] as const).map((m) => (
                 <button
                   key={m}
                   onClick={() => setSettlMethod(m)}
                   className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
-                    settlMethod === m
-                      ? "bg-white text-gray-900 shadow-sm"
-                      : "text-gray-500"
+                    settlMethod === m ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
                   }`}
                 >
                   {m}
@@ -365,9 +500,7 @@ export default function BalancePage() {
 
           {/* Name */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Name
-            </label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Name</label>
             <input
               type="text"
               value={settlName}
@@ -401,9 +534,7 @@ export default function BalancePage() {
       )}
 
       {/* Monthly breakdown */}
-      <h2 className="text-lg font-semibold text-gray-900 mb-3">
-        Monthly Breakdown
-      </h2>
+      <h2 className="text-lg font-semibold text-gray-900 mb-3">Monthly Breakdown</h2>
       {monthlyBreakdowns.length === 0 ? (
         <p className="text-gray-500 text-sm mb-6">No expenses yet</p>
       ) : (
@@ -412,15 +543,9 @@ export default function BalancePage() {
             <thead>
               <tr className="border-b border-gray-200 text-left">
                 <th className="py-2 pr-3 font-medium text-gray-500">Month</th>
-                <th className="py-2 pr-3 font-medium text-gray-500 text-right">
-                  Paid by Karen
-                </th>
-                <th className="py-2 pr-3 font-medium text-gray-500 text-right">
-                  Paid by N&J
-                </th>
-                <th className="py-2 font-medium text-gray-500 text-right">
-                  Net
-                </th>
+                <th className="py-2 pr-3 font-medium text-gray-500 text-right">Paid by Karen</th>
+                <th className="py-2 pr-3 font-medium text-gray-500 text-right">Paid by N&J</th>
+                <th className="py-2 font-medium text-gray-500 text-right">Net</th>
               </tr>
             </thead>
             <tbody>
@@ -428,23 +553,16 @@ export default function BalancePage() {
                 const isExpanded = expandedMonth === m.key;
                 return (
                   <>
-                    {/* Month summary row — clickable */}
                     <tr
                       key={m.key}
-                      onClick={() =>
-                        setExpandedMonth(isExpanded ? null : m.key)
-                      }
+                      onClick={() => setExpandedMonth(isExpanded ? null : m.key)}
                       className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
                     >
                       <td className="py-2.5 pr-3 text-gray-900 whitespace-nowrap">
                         <span className="flex items-center gap-1">
-                          <span className="text-gray-300 text-xs">
-                            {isExpanded ? "▲" : "▼"}
-                          </span>
+                          <span className="text-gray-300 text-xs">{isExpanded ? "▲" : "▼"}</span>
                           {m.label}
-                          {m.settled && (
-                            <span className="ml-1 text-green-500">✓</span>
-                          )}
+                          {m.settled && <span className="ml-1 text-green-500">✓</span>}
                         </span>
                       </td>
                       <td className="py-2.5 pr-3 text-right text-gray-700">
@@ -470,69 +588,45 @@ export default function BalancePage() {
                       </td>
                     </tr>
 
-                    {/* Expanded: individual Shared (all 3) entries */}
                     {isExpanded &&
                       (m.sharedExpenses.length === 0 ? (
                         <tr key={`${m.key}-empty`} className="bg-gray-50">
-                          <td
-                            colSpan={4}
-                            className="py-2 pl-6 text-xs text-gray-400 italic"
-                          >
+                          <td colSpan={4} className="py-2 pl-6 text-xs text-gray-400 italic">
                             No shared expenses this month
                           </td>
                         </tr>
                       ) : (
-                        m.sharedExpenses.map((e) => {
-                          const dateStr = e.date
-                            ? new Date(
-                                e.date + "T00:00:00"
-                              ).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                              })
-                            : "";
-                          return (
-                            <tr
-                              key={`${m.key}-${e.id}`}
-                              className="bg-gray-50 border-b border-gray-100"
+                        m.sharedExpenses.map((e) => (
+                          <tr key={`${m.key}-${e.id}`} className="bg-gray-50 border-b border-gray-100">
+                            <td className="py-1.5 pr-3 pl-5 text-xs text-gray-500">
+                              {e.item}
+                              {e.date && (
+                                <span className="text-gray-400"> · {fmtDate(e.date)}</span>
+                              )}
+                            </td>
+                            <td className="py-1.5 pr-3 text-right text-xs text-gray-600">
+                              {e.paidBy === "Karen" ? `$${e.amount.toFixed(2)}` : "—"}
+                            </td>
+                            <td className="py-1.5 pr-3 text-right text-xs text-gray-600">
+                              {e.paidBy === "Nash & Jordi" ? `$${e.amount.toFixed(2)}` : "—"}
+                            </td>
+                            <td
+                              className={`py-1.5 text-right text-xs font-medium ${
+                                e.karensOwes > 0
+                                  ? "text-green-600"
+                                  : e.karensOwes < 0
+                                  ? "text-orange-600"
+                                  : "text-gray-400"
+                              }`}
                             >
-                              <td className="py-1.5 pr-3 pl-5 text-xs text-gray-500">
-                                {e.item}
-                                {dateStr && (
-                                  <span className="text-gray-400">
-                                    {" "}
-                                    · {dateStr}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-1.5 pr-3 text-right text-xs text-gray-600">
-                                {e.paidBy === "Karen"
-                                  ? `$${e.amount.toFixed(2)}`
-                                  : "—"}
-                              </td>
-                              <td className="py-1.5 pr-3 text-right text-xs text-gray-600">
-                                {e.paidBy === "Nash & Jordi"
-                                  ? `$${e.amount.toFixed(2)}`
-                                  : "—"}
-                              </td>
-                              <td
-                                className={`py-1.5 text-right text-xs font-medium ${
-                                  e.karensOwes > 0
-                                    ? "text-green-600"
-                                    : e.karensOwes < 0
-                                    ? "text-orange-600"
-                                    : "text-gray-400"
-                                }`}
-                              >
-                                {e.karensOwes === 0
-                                  ? "—"
-                                  : e.karensOwes > 0
-                                  ? `+${e.karensOwes.toFixed(2)}`
-                                  : e.karensOwes.toFixed(2)}
-                              </td>
-                            </tr>
-                          );
-                        })
+                              {e.karensOwes === 0
+                                ? "—"
+                                : e.karensOwes > 0
+                                ? `+${e.karensOwes.toFixed(2)}`
+                                : e.karensOwes.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))
                       ))}
                   </>
                 );
@@ -543,9 +637,7 @@ export default function BalancePage() {
       )}
 
       {/* Category breakdown */}
-      <h2 className="text-lg font-semibold text-gray-900 mb-3">
-        By Category (Unsettled)
-      </h2>
+      <h2 className="text-lg font-semibold text-gray-900 mb-3">By Category (Unsettled)</h2>
       {categoryBreakdowns.length === 0 ? (
         <p className="text-gray-500 text-sm">No unsettled debts</p>
       ) : (
@@ -554,9 +646,7 @@ export default function BalancePage() {
             <div key={c.category}>
               <button
                 onClick={() =>
-                  setExpandedCategory(
-                    expandedCategory === c.category ? null : c.category
-                  )
+                  setExpandedCategory(expandedCategory === c.category ? null : c.category)
                 }
                 className="w-full flex items-center justify-between bg-white rounded-xl p-3 shadow-sm border border-gray-50"
               >
@@ -578,37 +668,24 @@ export default function BalancePage() {
               </button>
               {expandedCategory === c.category && (
                 <div className="mt-1 bg-gray-50 rounded-xl border border-gray-100 divide-y divide-gray-100 overflow-hidden">
-                  {c.items.map((e) => {
-                    const dateStr = e.date
-                      ? new Date(e.date + "T00:00:00").toLocaleDateString(
-                          "en-US",
-                          { month: "short", day: "numeric" }
-                        )
-                      : "";
-                    return (
-                      <div
-                        key={e.id}
-                        className="flex justify-between items-center px-3 py-2 text-xs"
+                  {c.items.map((e) => (
+                    <div key={e.id} className="flex justify-between items-center px-3 py-2 text-xs">
+                      <span className="text-gray-600 truncate mr-2">
+                        {e.item}
+                        {e.date && (
+                          <span className="text-gray-400"> · {fmtDate(e.date)}</span>
+                        )}
+                      </span>
+                      <span
+                        className={`shrink-0 font-medium ${
+                          e.karensOwes > 0 ? "text-green-600" : "text-orange-600"
+                        }`}
                       >
-                        <span className="text-gray-600 truncate mr-2">
-                          {e.item}
-                          {dateStr && (
-                            <span className="text-gray-400"> · {dateStr}</span>
-                          )}
-                        </span>
-                        <span
-                          className={`shrink-0 font-medium ${
-                            e.karensOwes > 0
-                              ? "text-green-600"
-                              : "text-orange-600"
-                          }`}
-                        >
-                          {e.karensOwes > 0 ? "+" : ""}
-                          {e.karensOwes.toFixed(2)}
-                        </span>
-                      </div>
-                    );
-                  })}
+                        {e.karensOwes > 0 ? "+" : ""}
+                        {e.karensOwes.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
