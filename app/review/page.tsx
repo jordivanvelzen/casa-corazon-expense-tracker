@@ -109,18 +109,27 @@ export default function ReviewPage() {
     const { id } = expense;
     setUpdatingId(id, true);
     try {
+      // Always recalculate so stale stored karensOwes doesn't affect the label or balance
+      const liveOwes = calculateKarenOwes(
+        expense.amount,
+        expense.split,
+        expense.paidBy,
+        expense.category
+      );
       const actionLabel =
-        expense.karensOwes > 0
+        liveOwes > 0
           ? "Approved by Karen"
-          : expense.karensOwes < 0
+          : liveOwes < 0
           ? "Approved by Nash & Jordi"
           : "Approved";
       const decision = formatDecision(actionLabel, approveComment);
       const newNotes = appendDecision(expense.notes, decision);
-      await patch(id, { toDiscuss: false, notes: newNotes });
+      await patch(id, { toDiscuss: false, karensOwes: liveOwes, notes: newNotes });
       setExpenses((prev) =>
         prev.map((e) =>
-          e.id === id ? { ...e, toDiscuss: false, notes: newNotes } : e
+          e.id === id
+            ? { ...e, toDiscuss: false, karensOwes: liveOwes, notes: newNotes }
+            : e
         )
       );
       setConfirmingId(null);
@@ -254,17 +263,24 @@ export default function ReviewPage() {
                   const isConfirming = confirmingId === expense.id;
                   const isChangingSplit = changingSplitId === expense.id;
 
+                  const liveOwes = calculateKarenOwes(
+                    expense.amount,
+                    expense.split,
+                    expense.paidBy,
+                    expense.category
+                  );
+
                   const approveLabel =
-                    expense.karensOwes > 0
+                    liveOwes > 0
                       ? "Approved by Karen"
-                      : expense.karensOwes < 0
+                      : liveOwes < 0
                       ? "Approved by Nash & Jordi"
                       : "Approve";
 
                   const approveColor =
-                    expense.karensOwes > 0
+                    liveOwes > 0
                       ? "text-green-600 bg-green-50 hover:bg-green-100"
-                      : expense.karensOwes < 0
+                      : liveOwes < 0
                       ? "text-blue-600 bg-blue-50 hover:bg-blue-100"
                       : "text-gray-600 bg-gray-50 hover:bg-gray-100";
 
