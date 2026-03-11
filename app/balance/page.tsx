@@ -12,6 +12,7 @@ interface MonthlyBreakdown {
   njPaid: number;
   monthlyNet: number;
   settled: boolean;
+  sharedExpenses: Expense[];
 }
 
 interface CategoryBreakdown {
@@ -49,8 +50,9 @@ export default function BalancePage() {
     type: "success" | "error";
   } | null>(null);
 
-  // Collapsible category
+  // Collapsible category / month
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
   const fetchAll = useCallback(() => {
     return fetch("/api/expenses")
@@ -119,12 +121,17 @@ export default function BalancePage() {
       year: "numeric",
     });
 
+    // Only count "Shared (all 3)" items in the paid / net columns
+    const sharedExpenses = monthExpenses
+      .filter((e) => e.split === "Shared (all 3)")
+      .sort((a, b) => b.date.localeCompare(a.date));
+
     let karenPaid = 0;
     let njPaid = 0;
     let netDebt = 0;
     let allSettled = true;
 
-    for (const e of monthExpenses) {
+    for (const e of sharedExpenses) {
       if (e.paidBy === "Karen") karenPaid += e.amount;
       else if (e.paidBy === "Nash & Jordi") njPaid += e.amount;
       netDebt += e.karensOwes;
@@ -140,6 +147,7 @@ export default function BalancePage() {
       njPaid: Math.round(njPaid * 100) / 100,
       monthlyNet,
       settled: allSettled,
+      sharedExpenses,
     });
   }
   monthlyBreakdowns.reverse();
@@ -416,37 +424,119 @@ export default function BalancePage() {
               </tr>
             </thead>
             <tbody>
-              {monthlyBreakdowns.map((m) => (
-                <tr key={m.key} className="border-b border-gray-50">
-                  <td className="py-2.5 pr-3 text-gray-900 whitespace-nowrap">
-                    {m.label}
-                    {m.settled && (
-                      <span className="ml-1 text-green-500">\u2713</span>
-                    )}
-                  </td>
-                  <td className="py-2.5 pr-3 text-right text-gray-700">
-                    {m.karenPaid > 0 ? `$${m.karenPaid.toFixed(2)}` : "—"}
-                  </td>
-                  <td className="py-2.5 pr-3 text-right text-gray-700">
-                    {m.njPaid > 0 ? `$${m.njPaid.toFixed(2)}` : "—"}
-                  </td>
-                  <td
-                    className={`py-2.5 text-right font-semibold ${
-                      m.monthlyNet > 0
-                        ? "text-green-600"
-                        : m.monthlyNet < 0
-                        ? "text-orange-600"
-                        : "text-gray-400"
-                    }`}
-                  >
-                    {m.monthlyNet === 0
-                      ? "—"
-                      : m.monthlyNet > 0
-                      ? `Karen $${m.monthlyNet.toFixed(2)}`
-                      : `N&J $${Math.abs(m.monthlyNet).toFixed(2)}`}
-                  </td>
-                </tr>
-              ))}
+              {monthlyBreakdowns.map((m) => {
+                const isExpanded = expandedMonth === m.key;
+                return (
+                  <>
+                    {/* Month summary row — clickable */}
+                    <tr
+                      key={m.key}
+                      onClick={() =>
+                        setExpandedMonth(isExpanded ? null : m.key)
+                      }
+                      className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="py-2.5 pr-3 text-gray-900 whitespace-nowrap">
+                        <span className="flex items-center gap-1">
+                          <span className="text-gray-300 text-xs">
+                            {isExpanded ? "▲" : "▼"}
+                          </span>
+                          {m.label}
+                          {m.settled && (
+                            <span className="ml-1 text-green-500">✓</span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-3 text-right text-gray-700">
+                        {m.karenPaid > 0 ? `$${m.karenPaid.toFixed(2)}` : "—"}
+                      </td>
+                      <td className="py-2.5 pr-3 text-right text-gray-700">
+                        {m.njPaid > 0 ? `$${m.njPaid.toFixed(2)}` : "—"}
+                      </td>
+                      <td
+                        className={`py-2.5 text-right font-semibold ${
+                          m.monthlyNet > 0
+                            ? "text-green-600"
+                            : m.monthlyNet < 0
+                            ? "text-orange-600"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {m.monthlyNet === 0
+                          ? "—"
+                          : m.monthlyNet > 0
+                          ? `Karen owes $${m.monthlyNet.toFixed(2)}`
+                          : `N&J owe $${Math.abs(m.monthlyNet).toFixed(2)}`}
+                      </td>
+                    </tr>
+
+                    {/* Expanded: individual Shared (all 3) entries */}
+                    {isExpanded &&
+                      (m.sharedExpenses.length === 0 ? (
+                        <tr key={`${m.key}-empty`} className="bg-gray-50">
+                          <td
+                            colSpan={4}
+                            className="py-2 pl-6 text-xs text-gray-400 italic"
+                          >
+                            No shared expenses this month
+                          </td>
+                        </tr>
+                      ) : (
+                        m.sharedExpenses.map((e) => {
+                          const dateStr = e.date
+                            ? new Date(
+                                e.date + "T00:00:00"
+                              ).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                              })
+                            : "";
+                          return (
+                            <tr
+                              key={`${m.key}-${e.id}`}
+                              className="bg-gray-50 border-b border-gray-100"
+                            >
+                              <td className="py-1.5 pr-3 pl-5 text-xs text-gray-500">
+                                {e.item}
+                                {dateStr && (
+                                  <span className="text-gray-400">
+                                    {" "}
+                                    · {dateStr}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-1.5 pr-3 text-right text-xs text-gray-600">
+                                {e.paidBy === "Karen"
+                                  ? `$${e.amount.toFixed(2)}`
+                                  : "—"}
+                              </td>
+                              <td className="py-1.5 pr-3 text-right text-xs text-gray-600">
+                                {e.paidBy === "Nash & Jordi"
+                                  ? `$${e.amount.toFixed(2)}`
+                                  : "—"}
+                              </td>
+                              <td
+                                className={`py-1.5 text-right text-xs font-medium ${
+                                  e.karensOwes > 0
+                                    ? "text-green-600"
+                                    : e.karensOwes < 0
+                                    ? "text-orange-600"
+                                    : "text-gray-400"
+                                }`}
+                              >
+                                {e.karensOwes === 0
+                                  ? "—"
+                                  : e.karensOwes > 0
+                                  ? `+${e.karensOwes.toFixed(2)}`
+                                  : e.karensOwes.toFixed(2)}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ))}
+                  </>
+                );
+              })}
             </tbody>
           </table>
         </div>
