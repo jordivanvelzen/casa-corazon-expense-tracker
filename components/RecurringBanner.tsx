@@ -7,6 +7,7 @@ import { getMissingRecurringForMonth, MissingRecurring } from "@/lib/recurringCh
 import { generateItemName } from "@/lib/generateItemName";
 import { getApprovedDeductions, getPendingDeductions, calculateAdjustedRent, effectiveDeductionAmount } from "@/lib/rentDeductions";
 import Spinner from "./Spinner";
+import Link from "next/link";
 
 interface RecurringBannerProps {
   onAdded: () => void;
@@ -233,7 +234,8 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
           </div>
           {pending.length > 0 && (
             <p className="text-xs text-amber-600">
-              + {pending.length} item{pending.length !== 1 ? "s" : ""} pending Karen&apos;s approval
+              + {pending.length} item{pending.length !== 1 ? "s" : ""} pending Karen&apos;s approval{" "}
+              <Link href="/review" className="underline font-medium">Review →</Link>
             </p>
           )}
           <button
@@ -274,7 +276,8 @@ export default function RecurringBanner({ onAdded }: RecurringBannerProps) {
           </div>
           {pending.length > 0 && (
             <p className="text-xs text-amber-600">
-              + {pending.length} item{pending.length !== 1 ? "s" : ""} pending Karen&apos;s approval
+              + {pending.length} item{pending.length !== 1 ? "s" : ""} pending Karen&apos;s approval{" "}
+              <Link href="/review" className="underline font-medium">Review →</Link>
             </p>
           )}
           <button
