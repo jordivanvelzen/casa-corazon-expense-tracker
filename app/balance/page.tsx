@@ -65,6 +65,9 @@ function fmtDate(date: string) {
   return new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+// Temporarily hide the "Nash & Jordi's contribution" card. Flip to true to restore.
+const SHOW_NJ_CONTRIBUTION = false;
+
 function Chevron({ open, className }: { open: boolean; className?: string }) {
   return (
     <svg
@@ -366,8 +369,8 @@ export default function BalancePage() {
         )}
       </div>
 
-      {/* Nash & Jordi paid — red, collapsible */}
-      {njOnlyTotal > 0 && (
+      {/* Nash & Jordi paid — red, collapsible (hidden for now via SHOW_NJ_CONTRIBUTION) */}
+      {SHOW_NJ_CONTRIBUTION && njOnlyTotal > 0 && (
         <div className="rounded-xl mb-2 overflow-hidden bg-orange-50 border border-orange-200">
           <button
             onClick={() => setNJExpanded(!njExpanded)}
